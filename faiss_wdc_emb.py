@@ -105,9 +105,34 @@ def check_brand_match(abt_brand, buy_brand):
     return 1 if b1 != 'none' and b2 != 'none' and b1 == b2 else 0
 
 
+folder="./data/wdc"
+brands_list = [] #'sony', 'bose', 'corsair', 'ubiquiti', 'kingston', 'sram', 'msi']
+with open(f"{folder}/brands.txt", 'r', encoding='utf-8') as f:
+    # Use a list comprehension to read each line, strip whitespace,
+    # and create a list.
+    brands_list = [line.strip() for line in f]
+
+
+def find_brand(title):
+    """Searches for a known brand in the product title."""
+    title_lower = str(title).lower()
+    for brand in brands_list:
+        if brand in title_lower:
+            return brand
+    return "unknown"
+
+def number_jaccard(text1, text2):
+    """Calculates Jaccard similarity on the sets of numbers within the texts."""
+    set1 = set(re.findall(r'\d+', str(text1)))
+    set2 = set(re.findall(r'\d+', str(text2)))
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    return intersection / union if union > 0 else 0
+
+
 
 if __name__ == '__main__':
-    truth = pd.read_csv("./data/wdc/gold_standard.csv", sep=",", encoding="unicode_escape", keep_default_na=False)
+    truth = pd.read_csv("./data/wdc/gold_standard_test.csv", sep=",", encoding="unicode_escape", keep_default_na=False)
     truthD = dict()
     a = 0
     for i, r in truth.iterrows():
@@ -128,8 +153,8 @@ if __name__ == '__main__':
     # ====================================================================--
 
     from tensorflow import keras  # Or `import keras` depending on your setup
-
-    loaded_model_path = './data/wdc/er_wdc.keras'
+    folder="./data/wdc"
+    loaded_model_path = f'{folder}/er_wdc.keras'
     # Load the model
     loaded_model = keras.models.load_model(loaded_model_path)
 
@@ -144,9 +169,11 @@ if __name__ == '__main__':
 
     num_candidates = 5
     d = 768
-    phi = 0.64362105252850850581358156651520531820505105065205350
-    df11 = pd.read_parquet(f"./data/wdc/tableA__.pqt")
-    df22 = pd.read_parquet(f"./data/wdc/tableB__.pqt")
+    phi = 0.52
+    df11 = pd.read_parquet(f"./data/wdc/tableA_test_tuned.pqt")
+    print(df11["title"])
+    df22 = pd.read_parquet(f"./data/wdc/tableB_test_tuned.pqt")
+    print(df22["description"])
     df11['id'] = pd.to_numeric(df11['id'])
     df22['id'] = pd.to_numeric(df22['id'])
     vectors_b = df22['v'].tolist()
@@ -162,6 +189,8 @@ if __name__ == '__main__':
     minhash_descrs2 = {row['id']: row['mv2'] for index, row in df22.iterrows()}
     df11['models'] = df11['title'].apply(extract_model)
     df22['models'] = df22['title'].apply(extract_model)
+
+
     models1 = {row['id']: row['models'] for index, row in df11.iterrows()}
     models2 = {row['id']: row['models'] for index, row in df22.iterrows()}
     names1 = {row['id']: row['title'] for index, row in df11.iterrows()}
@@ -255,9 +284,14 @@ if __name__ == '__main__':
             #br = check_brand_match(brand1, brand2)
             jw = jellyfish.jaro_winkler_similarity(str(name1), str(name2))
             price_diff = calculate_price_diff(price1, price2)
-            m = are_models_matching(model1, model2)
 
-            features_list.append([j_similarity1, j_similarity2,m, price_diff, jw])
+            brand1 = find_brand(name1)
+            brand2 = find_brand(name2)
+            br = check_brand_match(brand1, brand2)
+
+            m = number_jaccard(name1, name2)
+
+            features_list.append([j_similarity1, j_similarity2, m,br, price_diff, jw])
         features_array = np.array(features_list, dtype='float32')
         #features_2d = features_array.reshape(-1, 1)
 
@@ -281,7 +315,12 @@ if __name__ == '__main__':
         #combined_embeddings = features_array
         #print(combined_embeddings.shape)
 
+        #from sklearn.preprocessing import StandardScaler
+        #scaler = StandardScaler()
+        #features_array = scaler.fit_transform(features_array)
+
         predictions = loaded_model.predict( [combined_embeddings, interactions, features_array], verbose=0)
+        #predictions = loaded_model.predict([combined_embeddings, interactions], verbose=0)
 
         #predictions = loaded_model.predict_proba(combined_embeddings)
 
@@ -307,12 +346,17 @@ if __name__ == '__main__':
                        tpFound=True
                 if not tpFound:
                       fp += 1
-                #print(1,bId, df22.loc[df22["id"] == bId,"title"].item() ," _ ", aId, df11.loc[df11["id"] == aId, "title"].item(), "_", tpFound)
+                print(1,bId, df22.loc[df22["id"] == bId,"title"].item() ," _ ", aId, df11.loc[df11["id"] == aId, "title"].item(), "_", tpFound)
+                print(1, bId, df22.loc[df22["id"] == bId, "description"].item(), " _ ", aId,   df11.loc[df11["id"] == aId, "description"].item())
+                print("============================================================================================")
             #else:
                 #print(3,bId, df22.loc[df22["id"] == bId,"title"].item() ," _ ", aId, df11.loc[df11["id"] == aId, "title"].item(), "_", tpFound)
 
-          #else:
-              #print(0, bId, df22.loc[df22["id"] == bId, "title"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "title"].item())
+          else:
+              print(0, bId, df22.loc[df22["id"] == bId, "title"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "title"].item())
+              print(0, bId, df22.loc[df22["id"] == bId, "description"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "description"].item())
+              print("============================================================================================")
+
 
     end_time = time.time()
-    print(f"{tp} {fp}  recall={round(tp / matches, 2)} precision={round(tp / (tp + fp), 2)} total matching time={end_time-start_time} seconds.")
+    print(f"{tp} {fp}  recall={round(tp / matches, 2)} precision={round(tp / (0.0001 + tp + fp), 2)} total matching time={end_time-start_time} seconds.")

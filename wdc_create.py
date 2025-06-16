@@ -3,13 +3,14 @@ import os
 from sentence_transformers import SentenceTransformer
 import embed_features
 import wdc_fine_tune
-
+import re
+folder="./data/wdc"
 def preprocess_datasets(
-        file_table_a='./data/wdc/tableA.csv',
-        file_table_b='./data/wdc/tableB.csv',
-        file_train='./data/wdc/train.csv',
-        file_valid='./data/wdc/valid.csv',
-        file_test='./data/wdc/test.csv'
+        file_table_a=f'{folder}/tableA.csv',
+        file_table_b=f'{folder}/tableB.csv',
+        file_train=f'{folder}/train.csv',
+        file_valid=f'{folder}/valid.csv',
+        file_test=f'{folder}/test.csv'
 ):
     """
     Filters Table A and Table B to only include entities present in the
@@ -47,7 +48,7 @@ def preprocess_datasets(
     )
 
     # Save the gold standard to a new CSV file
-    gold_standard_output_path = './data/wdc/gold_standard.csv'
+    gold_standard_output_path = f'{folder}/gold_standard.csv'
     gold_standard_df.to_csv(gold_standard_output_path, index=False)
     print(f"Successfully created '{gold_standard_output_path}' with {len(gold_standard_df)} matching pairs.")
 
@@ -73,8 +74,8 @@ def preprocess_datasets(
     # --- 5. Save the new, filtered tables ---
     print("\n--- Saving filtered tables ---")
 
-    table_a_output_path = './data/wdc/tableA_.csv'
-    table_b_output_path = './data/wdc/tableB_.csv'
+    table_a_output_path = f'{folder}/tableA_.csv'
+    table_b_output_path = f'{folder}/tableB_.csv'
 
     df_a_filtered.to_csv(table_a_output_path, index=False)
     df_b_filtered.to_csv(table_b_output_path, index=False)
@@ -90,7 +91,7 @@ def preprocess_datasets(
     )
 
     # Save the gold standard to a new CSV file
-    gold_standard_output_path = './data/wdc/gold_standard.csv'
+    gold_standard_output_path = f'{folder}/gold_standard.csv'
     gold_standard_df.to_csv(gold_standard_output_path, index=False)
     print(f"Successfully created '{gold_standard_output_path}' with {len(gold_standard_df)} matching pairs.")
 
@@ -100,9 +101,9 @@ def preprocess_datasets(
 
 
 def create_test_set_tables(
-        file_table_a='./data/wdc/tableA.csv',
-        file_table_b='./data/wdc/tableB.csv',
-        file_test='./data/wdc/test.csv'
+        file_table_a=f'{folder}/tableA.csv',
+        file_table_b=f'{folder}/tableB.csv',
+        file_test=f'{folder}/test.csv'
 ):
     """
     Filters Table A and Table B to only include entities that appear
@@ -156,12 +157,12 @@ def create_test_set_tables(
     )
 
     # Save the gold standard to a new CSV file
-    gold_standard_output_path = './data/wdc/gold_standard_test.csv'
+    gold_standard_output_path = f'{folder}/gold_standard_test.csv'
     gold_standard_df.to_csv(gold_standard_output_path, index=False)
     print(f"Successfully created '{gold_standard_output_path}' with {len(gold_standard_df)} matching pairs.")
 
-    table_a_output_path = './data/wdc/tableA_test.csv'
-    table_b_output_path = './data/wdc/tableB_test.csv'
+    table_a_output_path = f'{folder}/tableA_test.csv'
+    table_b_output_path = f'{folder}/tableB_test.csv'
 
     df_a_filtered.to_csv(table_a_output_path, index=False)
     df_b_filtered.to_csv(table_b_output_path, index=False)
@@ -172,9 +173,9 @@ def create_test_set_tables(
 
 
 def create_train_set_tables(
-        file_table_a='./data/wdc/tableA_.csv',
-        file_table_b='./data/wdc/tableB_.csv',
-        file_train='./data/wdc/train.csv'
+        file_table_a=f'{folder}/tableA.csv',
+        file_table_b=f'{folder}/tableB.csv',
+        file_train=f'{folder}/train.csv'
 ):
     """
     Filters Table A and Table B to only include entities that appear
@@ -228,12 +229,12 @@ def create_train_set_tables(
     )
 
     # Save the gold standard to a new CSV file
-    gold_standard_output_path = './data/wdc/gold_standard_train.csv'
+    gold_standard_output_path = f'{folder}/gold_standard_train.csv'
     gold_standard_df.to_csv(gold_standard_output_path, index=False)
     print(f"Successfully created '{gold_standard_output_path}' with {len(gold_standard_df)} matching pairs.")
 
-    table_a_output_path = './data/wdc/tableA_train.csv'
-    table_b_output_path = './data/wdc/tableB_train.csv'
+    table_a_output_path = f'{folder}/tableA_train.csv'
+    table_b_output_path = f'{folder}/tableB_train.csv'
 
     df_a_filtered.to_csv(table_a_output_path, index=False)
     df_b_filtered.to_csv(table_b_output_path, index=False)
@@ -243,9 +244,9 @@ def create_train_set_tables(
     print("\n--- Process Complete! ---")
 
 def create_valid_set_tables(
-        file_table_a='./data/wdc/tableA_.csv',
-        file_table_b='./data/wdc/tableB_.csv',
-        file_train='./data/wdc/valid.csv'
+        file_table_a=f'{folder}/tableA.csv',
+        file_table_b=f'{folder}/tableB.csv',
+        file_train=f'{folder}/valid.csv'
 ):
     """
     Filters Table A and Table B to only include entities that appear
@@ -299,12 +300,12 @@ def create_valid_set_tables(
     )
 
     # Save the gold standard to a new CSV file
-    gold_standard_output_path = './data/wdc/gold_standard_valid.csv'
+    gold_standard_output_path = f'{folder}/gold_standard_valid.csv'
     gold_standard_df.to_csv(gold_standard_output_path, index=False)
     print(f"Successfully created '{gold_standard_output_path}' with {len(gold_standard_df)} matching pairs.")
 
-    table_a_output_path = './data/wdc/tableA_valid.csv'
-    table_b_output_path = './data/wdc/tableB_valid.csv'
+    table_a_output_path = f'{folder}/tableA_valid.csv'
+    table_b_output_path = f'{folder}/tableB_valid.csv'
 
     df_a_filtered.to_csv(table_a_output_path, index=False)
     df_b_filtered.to_csv(table_b_output_path, index=False)
@@ -314,92 +315,128 @@ def create_valid_set_tables(
     print("\n--- Process Complete! ---")
 
 
+def extract_unique_brands(
+        file_table_a=f'{folder}/tableA.csv',
+        file_table_b=f'{folder}/tableB.csv',
+        output_file=f'{folder}/brands.txt'
+):
+    """
+    Extracts a unique, clean list of all brands from the source tables.
+    It first uses the 'brand' column and then searches the 'title' column
+    to find additional brands.
+    """
+    print("--- Starting Brand Extraction ---")
+
+    # --- 1. Load source files ---
+    try:
+        print("Loading source files...")
+        df_a = pd.read_csv(file_table_a)
+        df_b = pd.read_csv(file_table_b)
+        print("Files loaded successfully.")
+    except FileNotFoundError as e:
+        print(f"Error: Could not find a required file. {e}")
+        return
+
+    # --- 2. Extract brands from the 'brand' column ---
+    print("Extracting brands from the 'brand' column...")
+
+    # Combine the 'brand' columns from both dataframes
+    all_known_brands = pd.concat([df_a['brand'], df_b['brand']]).dropna().unique()
+
+    # Clean the brands: convert to lowercase, strip whitespace, and filter out short/generic terms
+    cleaned_brands = set()
+    for brand in all_known_brands:
+        b = str(brand).lower().strip()
+        if len(b) > 2 and 'generic' not in b:
+            cleaned_brands.add(b)
+
+    print(f"Found {len(cleaned_brands)} unique brands from the 'brand' column.")
+
+    # --- 3. Find more brands by searching the 'title' column ---
+    print("Searching for additional brands within product titles...")
+
+    # Combine all titles into one Series for searching
+    all_titles = pd.concat([df_a['title'], df_b['title']]).dropna().str.lower()
+
+    # Iterate through our known brands and see if they appear in titles
+    # This helps confirm they are used consistently
+    brands_in_titles = set()
+    for title in all_titles:
+        for brand in cleaned_brands:
+            # Use regex word boundaries (\b) to match whole words only
+            if re.search(r'\b' + re.escape(brand) + r'\b', title):
+                brands_in_titles.add(brand)
+
+    print(f"Confirmed {len(brands_in_titles)} brands appear in titles.")
+
+    # --- 4. Save the final list to a text file ---
+    # We use the list of brands confirmed to be in titles as our final list
+    final_brand_list = sorted(list(brands_in_titles))
+
+    with open(output_file, 'w', encoding='utf-8') as f:
+        for brand in final_brand_list:
+            f.write(f"{brand}\n")
+
+    print(f"\nSuccessfully saved {len(final_brand_list)} unique brands to '{output_file}'.")
+    print("--- Process Complete! ---")
 
 if __name__ == '__main__':
     # This block runs when the script is executed directly
-    preprocess_datasets()
     model_name = 'all-MiniLM-L6-v2'
     model_name = "all-mpnet-base-v2"
-    embedding_model = SentenceTransformer(model_name)
-    embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableA_.csv',
-        output_filename='./data/wdc/tableA_.pqt',
-        model=embedding_model
-    )
+    #model_name = "roberta-base-nli-stsb-mean-tokens"
 
-    embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableB_.csv',
-        output_filename='./data/wdc/tableB_.pqt',
-        model=embedding_model
-    )
-
-
-    create_test_set_tables()
-    model_name = 'all-MiniLM-L6-v2'
-    model_name = "all-mpnet-base-v2"
-    embedding_model = SentenceTransformer(model_name)
-    embed_features.process_and_embed_table(
-      input_filename='./data/wdc/tableA_test.csv',
-      output_filename='./data/wdc/tableA_test.pqt',
-      model=embedding_model
-    )
-    embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableB_test.csv',
-        output_filename='./data/wdc/tableB_test.pqt',
-        model=embedding_model
-    )
-
+    #extract_unique_brands()
+    #exit()
     create_train_set_tables()
-    model_name = 'all-MiniLM-L6-v2'
-    model_name = "all-mpnet-base-v2"
     embedding_model = SentenceTransformer(model_name)
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableA_train.csv',
-        output_filename='./data/wdc/tableA_train.pqt',
+        input_filename=f'{folder}/tableA_train.csv',
+        output_filename=f'{folder}/tableA_train.pqt',
         model=embedding_model
     )
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableB_train.csv',
-        output_filename='./data/wdc/tableB_train.pqt',
+        input_filename=f'{folder}/tableB_train.csv',
+        output_filename=f'{folder}/tableB_train.pqt',
         model=embedding_model
     )
 
     wdc_fine_tune.fine_tune()
-    model_path = './data/wdc/wdc-finetuned-model'
+    model_path = f'{folder}/wdc-finetuned-model'
     embedding_model = SentenceTransformer(model_path)
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableA_train.csv',
-        output_filename='./data/wdc/tableA_train_tuned.pqt',
+        input_filename=f'{folder}/tableA_train.csv',
+        output_filename=f'{folder}/tableA_train_tuned.pqt',
         model=embedding_model
     )
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableB_train.csv',
-        output_filename='./data/wdc/tableB_train_tuned.pqt',
+        input_filename=f'{folder}/tableB_train.csv',
+        output_filename=f'{folder}/tableB_train_tuned.pqt',
         model=embedding_model
     )
 
     create_test_set_tables()
     embedding_model = SentenceTransformer(model_path)
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableA_test.csv',
-        output_filename='./data/wdc/tableA_test_tuned.pqt',
+        input_filename=f'{folder}/tableA_test.csv',
+        output_filename=f'{folder}/tableA_test_tuned.pqt',
         model=embedding_model
     )
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableB_test.csv',
-        output_filename='./data/wdc/tableB_test_tuned.pqt',
+        input_filename=f'{folder}/tableB_test.csv',
+        output_filename=f'{folder}/tableB_test_tuned.pqt',
         model=embedding_model
     )
 
     create_valid_set_tables()
     embedding_model = SentenceTransformer(model_path)
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableA_valid.csv',
-        output_filename='./data/wdc/tableA_valid_tuned.pqt',
+        input_filename=f'{folder}/tableA_valid.csv',
+        output_filename=f'{folder}/tableA_valid_tuned.pqt',
         model=embedding_model
     )
     embed_features.process_and_embed_table(
-        input_filename='./data/wdc/tableB_valid.csv',
-        output_filename='./data/wdc/tableB_valid_tuned.pqt',
+        input_filename=f'{folder}/tableB_valid.csv',
+        output_filename=f'{folder}/tableB_valid_tuned.pqt',
         model=embedding_model
     )

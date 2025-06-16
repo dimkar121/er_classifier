@@ -5,6 +5,7 @@ import re
 from sentence_transformers import SentenceTransformer
 import warnings
 import mmh3  # Added for your custom MinHash function
+from transformers import pipeline
 
 # Suppress the specific warning from pandas about inplace renaming
 warnings.filterwarnings(
@@ -53,6 +54,63 @@ def get_minhash_vector(text):
     return signature_array.tolist()
 
 
+print("Loading Question-Answering model...")
+qa_pipeline = pipeline("question-answering", model="distilbert-base-cased-distilled-squad")
+print("Model loaded.")
+
+# Define a set of questions to probe the description for key features
+PROBING_QUESTIONS = [
+    "What are the key features?",
+    "What is the model number or part number?",
+    "What is the capacity or size?",
+    "What is the resolution?",
+    "What is the material?",
+    "What is the color?",
+    "What is the technology used?"
+]
+
+
+def summarize_description(description):
+    """
+    Uses a QA model to extract key features from a description.
+    """
+    if not isinstance(description, str) or len(description) < 20:
+        return description  # Return empty if description is too short or not a string
+
+    feature_answers = []
+    # Ask each question and collect the answers
+    for question in PROBING_QUESTIONS:
+        result = qa_pipeline(question=question, context=description)
+        # We only keep high-confidence answers to avoid adding noise
+        if result['score'] > 0.1:
+            feature_answers.append(result['answer'])
+
+    # Return a unique, space-separated string of the found features
+    return " ".join(sorted(list(set(feature_answers))))
+
+
+def serialize_row(row, columns_to_serialize):
+    """
+    Serializes specified columns of a DataFrame row into a single string.
+    """
+    serialized_parts = []
+    for col in columns_to_serialize:
+        value = row.get(col, '')
+
+        # If the column is 'description', we use our new summarizer
+        if col == 'description':
+            processed_value = summarize_description(value)
+        else:
+            # For other columns like title and brand, we just clean them
+            processed_value = str(value).lower().strip()
+
+        if processed_value:
+            serialized_parts.append(f"[COL] {col} [VAL] {processed_value}")
+
+    return " ".join(serialized_parts)
+
+
+
 def process_and_embed_table(input_filename, output_filename, model):
     """
     Loads a table, generates dense embeddings and MinHash vectors,
@@ -81,8 +139,18 @@ def process_and_embed_table(input_filename, output_filename, model):
     df["title"] = df["title"].str.lower()
     df["brand"] = df["brand"].str.lower()
     df["description"] = df["description"].str.lower()
-    df['descr_shortened'] = df['description'].str[:120]
-    df['combined_text'] =  df['title'] + ' ' + df['description']
+
+    columns_to_serialize = ['brand', 'title', 'description']
+    # --- 3. Apply the serialization function to create the new column ---
+    # We use .apply() with a lambda function to pass the list of columns
+    # to our main serialization function for each row.
+    df['combined_text'] = df.apply(
+        lambda row: serialize_row(row, columns_to_serialize),
+        axis=1
+    )
+    df["description"] = summarize_description(df["description"].str.lower())  # df["description"].str.lower()
+
+    #df['combined_text'] =  df['title'] + ' ' + df['description']
 
     # --- Step 2: Generate Dense Embeddings (MiniLM) ---
     print("Generating dense embeddings... (This may take a while)")
@@ -105,36 +173,6 @@ def process_and_embed_table(input_filename, output_filename, model):
 
     # Save the updated DataFrame to a new CSV file
     df.to_parquet(output_filename, engine="pyarrow")
+    print(df["description"])
     print(f"Successfully created '{output_filename}' with new feature columns.")
 
-
-if __name__ == '__main__':
-    # --- Setup ---
-    # Specify the pre-trained model for sentence embeddings
-    model_name = 'all-MiniLM-L6-v2'
-    model_name = "all-mpnet-base-v2"
-    #model_name="wdc-finetuned-minilm"
-    model_path = './data/wdc/wdc-finetuned-minilm'
-    # Load the model. The library handles loading all the necessary files from that folder.
-    #print(f"Loading fine-tuned model from: {model_name}")
-
-    #print(f"Loading sentence transformer model: '{model_name}'...")
-    embedding_model = SentenceTransformer(model_name)
-    #embedding_model = SentenceTransformer(model_name)
-
-    # --- Processing ---
-    # Process tableA
-    process_and_embed_table(
-        input_filename='./data/wdc/tableA_.csv',
-        output_filename='./data/wdc/tableA_.pqt',
-        model=embedding_model
-    )
-
-    # Process tableB
-    process_and_embed_table(
-        input_filename='./data/wdc/tableB_.csv',
-        output_filename='./data/wdc/tableB_.pqt',
-        model=embedding_model
-    )
-
-    print("\nFeature generation complete for both tables.")

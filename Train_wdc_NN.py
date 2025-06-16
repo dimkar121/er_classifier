@@ -133,8 +133,32 @@ def check_brand_match(abt_brand, buy_brand):
     # Check that brands were found and that they match
     return 1 if b1 != 'none' and b2 != 'none' and b1 == b2 else 0
 
+folder="./data/wdc"
+brands_list = [] #'sony', 'bose', 'corsair', 'ubiquiti', 'kingston', 'sram', 'msi']
+with open(f"{folder}/brands.txt", 'r', encoding='utf-8') as f:
+    # Use a list comprehension to read each line, strip whitespace,
+    # and create a list.
+    brands_list = [line.strip() for line in f]
 
-def prepare_data_from_splits(df_a, df_b, df_split):
+
+def find_brand(title):
+    """Searches for a known brand in the product title."""
+    title_lower = str(title).lower()
+    for brand in brands_list:
+        if brand in title_lower:
+            return brand
+    return "unknown"
+
+def number_jaccard(text1, text2):
+    """Calculates Jaccard similarity on the sets of numbers within the texts."""
+    set1 = set(re.findall(r'\d+', str(text1)))
+    set2 = set(re.findall(r'\d+', str(text2)))
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    return intersection / union if union > 0 else 0
+
+
+def prepare_data_from_splits(df_a_name, df_b_name, df_split):
     """
     Takes a split dataframe (train, valid, or test) and prepares the feature
     and label matrices for the 3-branch neural network.
@@ -150,6 +174,10 @@ def prepare_data_from_splits(df_a, df_b, df_split):
     print(f"Processing split with {len(df_split)} pairs...")
 
     # --- Merge to create a full pairs dataframe for this split ---
+    df_a =  pd.read_parquet(df_a_name)
+    df_b = pd.read_parquet(df_b_name)
+    df_a['id'] = df_a['id'].astype('int64')
+    df_b['id'] = df_b['id'].astype('int64')
     pairs = df_split.copy()
     pairs = pd.merge(pairs, df_a, left_on='ltable_id', right_on='id', suffixes=('_a', '_b'))
     pairs = pd.merge(pairs, df_b, left_on='rtable_id', right_on='id', suffixes=('_a', '_b'))
@@ -161,7 +189,11 @@ def prepare_data_from_splits(df_a, df_b, df_split):
     features['desc_jaccard_sim'] = pairs.apply(lambda r: jaccard(r['mv2_a'], r['mv2_b']),  axis=1)
     pairs['models_a'] = pairs['title_a'].apply(extract_model)
     pairs['models_b'] = pairs['title_b'].apply(extract_model)
-    features['models_match'] = pairs.apply(lambda r: are_models_matching(r['models_a'], r['models_b']), axis=1)
+    #features['models_match'] = pairs.apply(lambda r: are_models_matching(r['models_a'], r['models_b']), axis=1)
+    features['models_match'] = pairs.apply(lambda r: number_jaccard(r['title_a'], r['title_b']), axis=1)
+    pairs['brand_a'] = pairs['title_a'].apply(find_brand)
+    pairs['brand_b'] = pairs['title_b'].apply(find_brand)
+    features['brand_match'] = pairs.apply(lambda r: check_brand_match(r['brand_a'], r['brand_b']), axis=1)
     features['price_match'] = pairs.apply(lambda r: calculate_price_diff(r['price_a'], r['price_b']), axis=1)
     features['title_jaro_sim'] = pairs.apply(lambda r: jellyfish.jaro_winkler_similarity(r['title_a'], r['title_b']), axis=1)
 
@@ -193,64 +225,17 @@ def prepare_data_from_splits(df_a, df_b, df_split):
 
 
 
-embedding_dim = 384 # Or df1['v'][0].shape[0] if 'v' contains numpy arrays
-df1 = pd.read_parquet(f"./data/wdc/tableA_.pqt")
-df2 = pd.read_parquet(f"./data/wdc/tableB_.pqt")
-df1['id'] = pd.to_numeric(df1['id'])
-df2['id'] = pd.to_numeric(df2['id'])
-
-#gold_standard = pd.read_csv(f"./data/wdc/gold_standard.csv", sep=",", encoding="utf-8", keep_default_na=False)
-minhash_names1 = {row['id']: row['mv1'] for index, row in df1.iterrows()}
-minhash_names2 = {row['id']: row['mv1'] for index, row in df2.iterrows()}
-minhash_descrs1 = {row['id']: row['mv2'] for index, row in df1.iterrows()}
-minhash_descrs2 = {row['id']: row['mv2'] for index, row in df2.iterrows()}
-prices1 = {row['id']: row['price'] for index, row in df1.iterrows()}
-prices2 = {row['id']: row['price'] for index, row in df2.iterrows()}
-names1 = {row['id']: row['title'] for index, row in df1.iterrows()}
-names2 = {row['id']: row['title'] for index, row in df2.iterrows()}
-df1['models'] = df1['title'].apply(extract_model)
-df2['models'] = df2['title'].apply(extract_model)
-models1 = {row['id']: row['models'] for index, row in df1.iterrows()}
-models2 = {row['id']: row['models'] for index, row in df2.iterrows()}
-#all_brands = df2_minhash['brand'].dropna().unique()
-#brands_list = sorted([str(b).lower() for b in all_brands if len(str(b)) > 2], key=len, reverse=True)
-#df1_minhash['brand'] = df1_minhash['name'].apply(lambda text: find_brand_in_text(text, brands_list))
-brands1 = {row['id']: row['brand'] for index, row in df1.iterrows()}
-brands2 = {row['id']: row['brand'] for index, row in df2.iterrows()}
-vectors1 = df1['v'].tolist()
-vectors2 = df2['v'].tolist()
-ids1_ = df1['id'].tolist()
-
-# Create dictionaries for quick embedding lookups
-embeddings1 = {row['id']: row['v'] for index, row in df1.iterrows()}
-embeddings2 = {row['id']: row['v'] for index, row in df2.iterrows()}
-
-
-df_train = pd.read_csv('./data/wdc/train.csv')
-df_test = pd.read_csv('./data/wdc/test.csv')
-df_valid = pd.read_csv('./data/wdc/valid.csv')
-X1_train, X2_train, X3_train, y_train = prepare_data_from_splits(df1, df2, df_train)
-X1_val, X2_val, X3_val, y_val = prepare_data_from_splits(df1, df2, df_valid)
-X1_test, X2_test, X3_test, y_test = prepare_data_from_splits(df1, df2, df_test)
+df_train = pd.read_csv(f'{folder}/train.csv')
+df_test = pd.read_csv(f'{folder}/test.csv')
+df_valid = pd.read_csv(f'{folder}/valid.csv')
+X1_train, X2_train, X3_train, y_train = prepare_data_from_splits(f'{folder}/tableA_train_tuned.pqt', f'{folder}/tableB_train_tuned.pqt', df_train)
+X1_val, X2_val, X3_val, y_val = prepare_data_from_splits(f'{folder}/tableA_valid_tuned.pqt', f'{folder}/tableB_valid_tuned.pqt', df_valid)
+X1_test, X2_test, X3_test, y_test = prepare_data_from_splits(f'{folder}/tableA_test_tuned.pqt', f'{folder}/tableB_test_tuned.pqt', df_test)
 
 print("\n--- Final Data Shapes ---")
 print(f"Train shapes: X1={X1_train.shape}, X2={X2_train.shape}, X3={X3_train.shape}, y={y_train.shape}")
 print(f"Valid shapes: X1={X1_val.shape}, X2={X2_val.shape}, X3={X3_val.shape}, y={y_val.shape}")
 print(f"Test shapes:  X1={X1_test.shape}, X2={X2_test.shape}, X3={X3_test.shape}, y={y_test.shape}")
-
-d=768
-emb1_batch = X_data[:, :d]
-emb2_batch = X_data[:, d:]
-numerator = np.einsum('ij,ij->i', emb1_batch, emb2_batch)
-denominator = np.linalg.norm(emb1_batch, axis=1) * np.linalg.norm(emb2_batch, axis=1)
-epsilon = 1e-7
-cosine_sim_scores = (numerator / (denominator + epsilon)).reshape(-1, 1)
-X_features = np.concatenate([X_features, cosine_sim_scores], axis=1)
-
-diff_vectors = emb1_batch - emb2_batch
-product_vectors = emb1_batch * emb2_batch
-X_interactions = np.concatenate([diff_vectors, product_vectors], axis=1)
-
 
 
 #X_embeddings_train, X_embeddings_val, X_interactions_train, X_interactions_val,  X_features_train, X_features_val, y_train,  y_val = train_test_split(
@@ -260,7 +245,7 @@ X_interactions = np.concatenate([diff_vectors, product_vectors], axis=1)
 X_embeddings_train = X1_train
 X_embeddings_val = X1_val
 X_interactions_train = X2_train
-X_interactions_val = X1_val
+X_interactions_val = X2_val
 X_features_train =  X3_train
 X_features_val = X3_val
 y_train = y_train
@@ -270,18 +255,18 @@ y_val = y_val
 # Scale the engineered features (still a best practice)
 #from sklearn.preprocessing import StandardScaler
 #scaler = StandardScaler()
-#X_eng_train_scaled = scaler.fit_transform(X_eng_train)
-#X_eng_val_scaled = scaler.transform(X_eng_val)
+#X_features_train = scaler.fit_transform(X_features_train)
+#X_features_val = scaler.fit_transform(X_features_val)
 
 
 
-embedding_input_shape = X_embeddings_train.shape[1]  # e.g., 768
+embeddings_input_shape = X_embeddings_train.shape[1]  # e.g., 768
 features_input_shape = X_features_train.shape[1] # e.g., 6
-interactions_input_shape = X_interactions.shape[1]
+interactions_input_shape = X_interactions_train.shape[1]
 
-embedding_input = Input(shape=(embedding_input_shape,), name='embedding_input')
-x1 = Dense(768, activation='relu')(embedding_input)
-x1 = Dropout(0.2)(x1)
+embeddings_input = Input(shape=(embeddings_input_shape,), name='embedding_input')
+x1 = Dense(768, activation='relu')(embeddings_input)
+x1 = Dropout(0.3)(x1)
 x1 = Dense(384, activation='relu')(x1)
 # The output of this branch is the 'x1' tensor
 
@@ -293,7 +278,7 @@ x1 = Dense(384, activation='relu')(x1)
 
 interactions_input = Input(shape=(interactions_input_shape,), name='interactions_input')
 x2 = Dense(768, activation='relu')(interactions_input)
-x2 = Dropout(0.2)(x2)
+x2 = Dropout(0.3)(x2)
 x2 = Dense(384, activation='relu')(x2)
 
 #x2 = Dense(512, activation='relu')(interactions_input) # Start with a wider layer
@@ -313,17 +298,20 @@ x3 = Dense(32, activation='relu')(x3)
 
 # --- Combine the branches ---
 combined = Concatenate()([x1, x2, x3])
+#combined = Concatenate()([x1, x2])
+
 
 # --- Add a final classifier head ---
 final_dense = Dense(256, activation='relu')(combined)
-final_dropout = Dropout(0.2)(final_dense)
+final_dropout = Dropout(0.3)(final_dense)
 final_dense = Dense(128, activation='relu')(final_dense)
-final_dropout = Dropout(0.2)(final_dense)
+final_dropout = Dropout(0.3)(final_dense)
 
 output = Dense(1, activation='sigmoid', name='output')(final_dropout)
 
 # The model takes a list of inputs and produces a single output
-model = Model(inputs=[embedding_input, interactions_input, features_input], outputs=output)
+model = Model(inputs=[embeddings_input, interactions_input, features_input], outputs=output)
+#model = Model(inputs=[embeddings_input, interactions_input], outputs=output)
 
 model.compile(optimizer='adam',
               loss='binary_crossentropy',
@@ -338,6 +326,11 @@ model.summary()
 train_inputs = [X_embeddings_train, X_interactions_train, X_features_train]
 val_inputs = [X_embeddings_val, X_interactions_val, X_features_val]
 test_inputs = [X1_test, X2_test, X3_test]
+
+#train_inputs = [X_embeddings_train, X_interactions_train]
+#val_inputs = [X_embeddings_val, X_interactions_val]
+#test_inputs = [X1_test, X2_test]
+
 
 # We will monitor validation loss. Training will stop if it doesn't improve for 10 epochs.
 # The model will automatically be restored to the weights of the best epoch.
@@ -359,7 +352,7 @@ history = model.fit(
     epochs=100,
     batch_size=64,
     verbose=1,
-    class_weight=class_weight,
+    #class_weight=class_weight,
     callbacks=[early_stopping_callback]
 )
 
@@ -379,7 +372,7 @@ print(f"Recall: {recall:.4f}")
 print(f"F1-Score: {f1:.4f}")
 
 
-model_save_path = f"./data/wdc/er_wdc.keras"
+model_save_path = f"{folder}/er_wdc.keras"
 model.save(model_save_path)
 print(f"Model saved to {model_save_path}")
 

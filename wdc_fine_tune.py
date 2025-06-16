@@ -5,6 +5,7 @@ import math
 from sentence_transformers import InputExample
 from sentence_transformers import SentenceTransformer, losses
 from torch.utils.data import DataLoader
+from sentence_transformers import evaluation
 import time
 
 def fine_tune():
@@ -64,7 +65,7 @@ def fine_tune():
             if random_a_record['id'] != positive_a_id:
                 easy_negative_a_ids.append(random_a_record['id'])
 
-            if len(easy_negative_a_ids) == 2:
+            if len(easy_negative_a_ids) == 1:
                  break
 
 
@@ -90,20 +91,33 @@ def fine_tune():
     print("\n--- 3. Creating InputExample objects for training ---")
     train_examples = []
     # Create mapping dictionaries for fast text lookup
-    df1['descr_shortened'] = df1['description'].str[:120]
-    df1['combined_text'] = df1['title'] #+ ' ' + df1['description']
-    df2['descr_shortened'] = df2['description'].str[:120]
-    df2['combined_text'] = df2['title'] #+ ' ' + df2['description']
+    df1['combined_text'] = df1['title'] + ' ' + df1['description']
+    df2['combined_text'] = df2['title'] + ' ' + df2['description']
     a_id_to_text = pd.Series(df1.combined_text.values, index=df1.id).to_dict()
     b_id_to_text = pd.Series(df2.combined_text.values, index=df2.id).to_dict()
 
+    sentences1 = []
+    sentences2 = []
+    labels = []
     for triplet in training_triplets_ids:
         anchor_text =   b_id_to_text.get(triplet['b_id'])
         positive_text = a_id_to_text.get(triplet['positive_a_id'])
         negative_text = a_id_to_text.get(triplet['negative_a_id'])
 
         if anchor_text and positive_text and negative_text:
-            train_examples.append(InputExample(texts=[anchor_text, positive_text, negative_text]))
+            train_examples.append(InputExample(texts=[anchor_text, positive_text, negative_text]))  #this is for tripletloss
+
+            #train_examples.append(InputExample(texts=[anchor_text, positive_text], label=1))
+            #train_examples.append(InputExample(texts=[anchor_text, negative_text], label=0))
+
+            sentences1.append(anchor_text)
+            sentences2.append(positive_text)
+            labels.append(1)
+
+            # Negative pair
+            sentences1.append(anchor_text)
+            sentences2.append(negative_text)
+            labels.append(0)
 
     print(f"Final number of training examples: {len(train_examples)}")
     print("\nExample of a training triplet:")
@@ -114,6 +128,7 @@ def fine_tune():
     # Load the pre-trained MiniLM model that we will fine-tune
     model_name = 'all-MiniLM-L6-v2'
     model_name = "all-mpnet-base-v2"
+    #model_name = "roberta-base-nli-stsb-mean-tokens"
     model = SentenceTransformer(model_name)
 
     # TripletLoss requires a dataloader that creates smart batches.
@@ -122,16 +137,26 @@ def fine_tune():
 
     # Define the TripletLoss function. This is the heart of the fine-tuning.
     train_loss = losses.TripletLoss(model=model)
+    #train_loss = losses.SoftmaxLoss(
+    #    model=model,
+    #    sentence_embedding_dimension=model.get_sentence_embedding_dimension(),
+    #    num_labels=2  # binary classification (match / non-match)
+    #)
 
     print("--- Model, Loss Function, and DataLoader are Ready ---")
 
     # --- 2. Fine-Tune the Model ---
 
     # Configure the training
-    num_epochs = 1  # 1-4 epochs is usually sufficient for fine-tuning on this task.
+    num_epochs = 2  # 1-4 epochs is usually sufficient for fine-tuning on this task.
     warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)  # 10% of training steps for warm-up
     output_model_path = './data/wdc/wdc-finetuned-model'  # The path where the new model will be saved
 
+    evaluator = evaluation.BinaryClassificationEvaluator(
+        sentences1=sentences1,
+        sentences2=sentences2,
+        labels=labels  # 1 = match, 0 = non-match
+    )
     # The model's .fit() method orchestrates the entire training process
     print("\n--- Starting the Fine-Tuning Process ---")
     print(f"This will run for {num_epochs} epochs.")
@@ -139,6 +164,8 @@ def fine_tune():
     model.fit(
         train_objectives=[(train_dataloader, train_loss)],
         epochs=num_epochs,
+        evaluation_steps=1000,
+        evaluator=evaluator,
         warmup_steps=warmup_steps,
         output_path=output_model_path,
         show_progress_bar=True,
