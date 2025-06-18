@@ -4,6 +4,7 @@ from sentence_transformers import SentenceTransformer
 import embed_features
 import wdc_fine_tune
 import re
+import wdc_clean
 folder="./data/wdc"
 def preprocess_datasets(
         file_table_a=f'{folder}/tableA.csv',
@@ -383,7 +384,7 @@ def extract_unique_brands(
 if __name__ == '__main__':
     # This block runs when the script is executed directly
     model_name = 'all-MiniLM-L6-v2'
-    model_name = "all-mpnet-base-v2"
+    #model_name = "all-mpnet-base-v2"
     #model_name = "roberta-base-nli-stsb-mean-tokens"
 
     #extract_unique_brands()
@@ -400,6 +401,10 @@ if __name__ == '__main__':
         output_filename=f'{folder}/tableB_train.pqt',
         model=embedding_model
     )
+    wdc_clean.clean_near_duplicates_from_sources(f'{folder}/tableA_train.csv',f'{folder}/tableA_train.pqt',
+                                       f'{folder}/tableB_train.csv',  f'{folder}/tableB_train.pqt',
+                                       f'{folder}/gold_standard_train.csv')
+
 
     wdc_fine_tune.fine_tune()
     model_path = f'{folder}/wdc-finetuned-model'
@@ -427,6 +432,9 @@ if __name__ == '__main__':
         output_filename=f'{folder}/tableB_test_tuned.pqt',
         model=embedding_model
     )
+    wdc_clean.clean_near_duplicates_from_sources(f'{folder}/tableA_test.csv', f'{folder}/tableA_test.pqt',
+                                       f'{folder}/tableB_test.csv', f'{folder}/tableB_test.pqt',
+                                       f'{folder}/gold_standard_test.csv')
 
     create_valid_set_tables()
     embedding_model = SentenceTransformer(model_path)
@@ -440,3 +448,6 @@ if __name__ == '__main__':
         output_filename=f'{folder}/tableB_valid_tuned.pqt',
         model=embedding_model
     )
+    wdc_clean.clean_near_duplicates_from_sources(f'{folder}/tableA_valid.csv', f'{folder}/tableA_valid.pqt',
+                                       f'{folder}/tableB_valid.csv', f'{folder}/tableB_valid.pqt',
+                                       f'{folder}/gold_standard_valid.csv')

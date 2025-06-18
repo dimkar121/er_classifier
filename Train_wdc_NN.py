@@ -34,6 +34,8 @@ y_data = []
 X_features = []
 
 
+
+
 def extract_model(text):
     """
     Extracts potential model numbers using a list of regex patterns robust
@@ -263,11 +265,10 @@ y_val = y_val
 embeddings_input_shape = X_embeddings_train.shape[1]  # e.g., 768
 features_input_shape = X_features_train.shape[1] # e.g., 6
 interactions_input_shape = X_interactions_train.shape[1]
-
 embeddings_input = Input(shape=(embeddings_input_shape,), name='embedding_input')
-x1 = Dense(768, activation='relu')(embeddings_input)
+x1 = Dense(512, activation='relu')(embeddings_input)
 x1 = Dropout(0.3)(x1)
-x1 = Dense(384, activation='relu')(x1)
+x1 = Dense(256, activation='relu')(x1)
 # The output of this branch is the 'x1' tensor
 
 #x1 = Dense(512, activation='relu')(embedding_input) # Start with a wider layer
@@ -277,9 +278,9 @@ x1 = Dense(384, activation='relu')(x1)
 #x1 = Dense(128, activation='relu')(x1) # Add the extra layer
 
 interactions_input = Input(shape=(interactions_input_shape,), name='interactions_input')
-x2 = Dense(768, activation='relu')(interactions_input)
+x2 = Dense(512, activation='relu')(interactions_input)
 x2 = Dropout(0.3)(x2)
-x2 = Dense(384, activation='relu')(x2)
+x2 = Dense(256, activation='relu')(x2)
 
 #x2 = Dense(512, activation='relu')(interactions_input) # Start with a wider layer
 #x2 = Dropout(0.3)(x2)

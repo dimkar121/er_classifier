@@ -60,7 +60,7 @@ print("Model loaded.")
 
 # Define a set of questions to probe the description for key features
 PROBING_QUESTIONS = [
-    "What are the key features?",
+    #"What is the key feature?",
     "What is the model number or part number?",
     "What is the capacity or size?",
     "What is the resolution?",
@@ -74,7 +74,7 @@ def summarize_description(description):
     """
     Uses a QA model to extract key features from a description.
     """
-    if not isinstance(description, str) or len(description) < 20:
+    if not isinstance(description, str) or len(description) < 10:
         return description  # Return empty if description is too short or not a string
 
     feature_answers = []
@@ -140,7 +140,9 @@ def process_and_embed_table(input_filename, output_filename, model):
     df["brand"] = df["brand"].str.lower()
     df["description"] = df["description"].str.lower()
 
-    columns_to_serialize = ['brand', 'title', 'description']
+    #columns_to_serialize = ['brand', 'title', 'description']
+    columns_to_serialize = ['title']
+
     # --- 3. Apply the serialization function to create the new column ---
     # We use .apply() with a lambda function to pass the list of columns
     # to our main serialization function for each row.
@@ -173,6 +175,6 @@ def process_and_embed_table(input_filename, output_filename, model):
 
     # Save the updated DataFrame to a new CSV file
     df.to_parquet(output_filename, engine="pyarrow")
-    print(df["description"])
+
     print(f"Successfully created '{output_filename}' with new feature columns.")
 

@@ -1,17 +1,22 @@
 import pandas as pd
+import os
+from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
-import math
 from sentence_transformers import InputExample
 from sentence_transformers import SentenceTransformer, losses
 from torch.utils.data import DataLoader
 from sentence_transformers import evaluation
 import time
+import utilities
 
-def fine_tune():
-    df1 = pd.read_parquet(f"./data/wdc/tableA_train.pqt")
-    df2 = pd.read_parquet(f"./data/wdc/tableB_train.pqt")
-    gold_standard = pd.read_csv(f"./data/wdc/gold_standard_train.csv", sep=",", encoding="utf-8", keep_default_na=False)
+
+folder="./data"
+
+def fine_tune(text_columns_imdb, text_columns_dbpedia):
+    df1 = pd.read_parquet(f"./data/imdb.pqt")
+    df2 = pd.read_parquet(f"./data/dbpedia.pqt")
+    gold_standard = pd.read_csv(f"./data/truth_imdb_dbpedia.csv", sep="|", encoding="utf-8", keep_default_na=False)
     df1['id'] = pd.to_numeric(df1['id'])
     df2['id'] = pd.to_numeric(df2['id'])
     a_embeddings = df1['v'].tolist()
@@ -29,8 +34,8 @@ def fine_tune():
     k = 10  # Number of nearest neighbors to search for
 
     for index, row in gold_standard.iterrows():
-        b_id = row['id_B']
-        positive_a_id = row['id_A']
+        b_id = row['D2']
+        positive_a_id = row['D1']
 
         # Get the index (row number) of the Google record
         anchor_idx = df2[df2['id'] == b_id].index[0]
@@ -90,9 +95,12 @@ def fine_tune():
     # --- Step 3: Retrieve Text and Create InputExamples ---
     print("\n--- 3. Creating InputExample objects for training ---")
     train_examples = []
-    # Create mapping dictionaries for fast text lookup
-    df1['combined_text'] = df1['title'] + ' ' + df1['description']
-    df2['combined_text'] = df2['title'] + ' ' + df2['description']
+
+
+    df1['combined_text'] = df1[text_columns_imdb].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    df2['combined_text'] = df2[text_columns_dbpedia].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    df1['combined_text'] = df1['combined_text'].str.lower()
+    df2['combined_text'] = df2['combined_text'].str.lower()
     a_id_to_text = pd.Series(df1.combined_text.values, index=df1.id).to_dict()
     b_id_to_text = pd.Series(df2.combined_text.values, index=df2.id).to_dict()
 
@@ -148,9 +156,9 @@ def fine_tune():
     # --- 2. Fine-Tune the Model ---
 
     # Configure the training
-    num_epochs = 2  # 1-4 epochs is usually sufficient for fine-tuning on this task.
+    num_epochs = 1  # 1-4 epochs is usually sufficient for fine-tuning on this task.
     warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)  # 10% of training steps for warm-up
-    output_model_path = './data/wdc/wdc-finetuned-model'  # The path where the new model will be saved
+    output_model_path = './data/imdb_dbpedia-finetuned-model'  # The path where the new model will be saved
 
     evaluator = evaluation.BinaryClassificationEvaluator(
         sentences1=sentences1,
@@ -180,13 +188,103 @@ def fine_tune():
     print(f"Your new, specialized model has been saved to: '{output_model_path}'")
 
 
+def embed(input_filename, output_filename, text_columns, model):
+    """
+    Loads a table, generates dense embeddings and MinHash vectors,
+    and saves the result to a new file.
+    """
+    if not os.path.exists(input_filename):
+        print(f"Error: Input file '{input_filename}' not found. Skipping.")
+        return
+
+    print(f"\nProcessing '{input_filename}'...")
+
+    # Load the table, reading all data as strings to be safe
+    df = pd.read_csv(input_filename, sep="|", dtype=str)
+
+    # --- Step 1: Prepare text data ---
+    # Fill any missing values in text columns with an empty string
+
+    for col in text_columns:
+        if col not in df.columns:
+            df[col] = ''
+        else:
+            df[col].fillna('', inplace=True)
+
+    # Combine relevant text columns for dense embedding
+    print("Creating combined text for dense embeddings...")
+
+    #df[text_columns].apply(lambda x: x.str.lower())
+    for col in text_columns:
+        df[col] = df[col].str.lower()
+
+    #df['combined_text'] = df[text_columns].fillna('').sum(axis=1)
+    df['combined_text'] = df[text_columns].fillna('').apply(lambda row: ' '.join(row), axis=1)
+
+    print("Generating dense embeddings... (This may take a while)")
+    sentences = df['combined_text'].tolist()
+    embeddings = model.encode(sentences, show_progress_bar=True)
+
+    # Add the embeddings to the DataFrame in a new column 'v'
+    df['v'] = [emb.tolist() for emb in embeddings]
+
+    for col in text_columns:
+        df[f"{col}_v"] =  df[col].apply(lambda x: utilities.minhash(utilities.bigrams(x) ) )
+    # --- Step 3: Generate MinHash Vectors ---
+    #print("Generating MinHash vectors for title (mv1)...")
+    #df['mv1'] = df['title'].apply(get_minhash_vector)
+
+    #print("Generating MinHash vectors for description (mv2)...")
+    #df['mv2'] = df['description'].apply(get_minhash_vector)
+
+    # --- Step 4: Finalize and Save ---
+    # Drop the temporary combined_text column
+    df.drop(columns=['combined_text'], inplace=True)
+
+    # Save the updated DataFrame to a new CSV file
+    df.to_parquet(output_filename, engine="pyarrow")
+
+    print(f"Successfully created '{output_filename}' with new feature columns.")
 
 
 
 
 
+if __name__ == '__main__':
+    # This block runs when the script is executed directly
+    model_name = 'all-MiniLM-L6-v2'
+    #model_name = "all-mpnet-base-v2"
+    #model_name = "roberta-base-nli-stsb-mean-tokens"
+    embedding_model = SentenceTransformer(model_name)
+
+    embed(
+        input_filename=f'{folder}/imdb.csv',
+        output_filename=f'{folder}/imdb.pqt',
+        text_columns=["title", "starring"],
+        model=embedding_model
+    )
+    embed(
+        input_filename=f'{folder}/dbpedia.csv',
+        output_filename=f'{folder}/dbpedia.pqt',
+        text_columns=["title", "actor name"],
+        model=embedding_model
+    )
+
+    fine_tune(["title","starring"], ["title", "actor name"])
 
 
-
-
+    model_path = f'{folder}/imdb_dbpedia-finetuned-model'
+    embedding_model = SentenceTransformer(model_path)
+    embed(
+        input_filename=f'{folder}/imdb.csv',
+        output_filename=f'{folder}/imdb_tuned.pqt',
+        text_columns=["title","starring"],
+        model=embedding_model
+    )
+    embed(
+        input_filename=f'{folder}/dbpedia.csv',
+        output_filename=f'{folder}/dbpedia_tuned.pqt',
+        text_columns=["title", "actor name"],
+        model=embedding_model
+    )
 

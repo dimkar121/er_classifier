@@ -5,6 +5,40 @@ import time
 from scipy.spatial.distance import jaccard
 import re
 import jellyfish
+import mmh3
+def bigrams(s):
+    """Generates a set of 2-character shingles from a string."""
+    if not isinstance(s, str):
+        return set()
+    s = s.lower()
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+
+def minhash(set_elements, num_hashes=120):
+    """
+    Generates a binary MinHash signature for a set of elements.
+    """
+    # Handle empty sets
+    if not set_elements:
+        return np.zeros(num_hashes, dtype=np.uint8)
+
+    signature = np.zeros(num_hashes, dtype=np.uint8)
+    for i in range(num_hashes):
+        # Calculate the minimum hash for the current hash function (seed)
+        min_hash = min(mmh3.hash(str(el), seed=i) & 0xFFFFFFFF for el in set_elements)
+        # Convert the result to a binary feature (1 if even, 0 if odd)
+        signature[i] = 1 if (min_hash % 2) == 0 else 0
+    return signature
+
+
+def get_minhash_vector(text):
+    """
+    A wrapper function that takes text, creates bigrams, generates a
+    binary MinHash signature, and returns it as a list.
+    """
+    bigram_set = bigrams(text)
+    signature_array = minhash(bigram_set)
+    return signature_array.tolist()
 
 def extract_model(text):
     """
@@ -168,18 +202,16 @@ if __name__ == '__main__':
     batch_size = 10_000
 
     num_candidates = 5
-    d = 768
-    phi = 0.52
+    phi = 0.30
     df11 = pd.read_parquet(f"./data/wdc/tableA_test_tuned.pqt")
-    print(df11["title"])
     df22 = pd.read_parquet(f"./data/wdc/tableB_test_tuned.pqt")
-    print(df22["description"])
     df11['id'] = pd.to_numeric(df11['id'])
     df22['id'] = pd.to_numeric(df22['id'])
     vectors_b = df22['v'].tolist()
     b_embeddings = np.array(vectors_b).astype(np.float32)
     vectors_a = df11['v'].tolist()
     a_embeddings = np.array(vectors_a).astype(np.float32)
+    d = a_embeddings.shape[1]
     a_ids = np.array(df11['id'].tolist())
     b_ids = np.array(df22['id'].tolist())
 
@@ -333,6 +365,8 @@ if __name__ == '__main__':
 
 
           aId = a_ids[a_ind]
+          tps= set()
+          fps = set()
           if predicted_status == 1:
             tpFound = False
             if aId in truthD.keys():
@@ -343,20 +377,30 @@ if __name__ == '__main__':
                 for idB in idBs:
                     if idB == bId:
                        tp += 1
+                       tps.add(idB)
                        tpFound=True
-                if not tpFound:
-                      fp += 1
-                print(1,bId, df22.loc[df22["id"] == bId,"title"].item() ," _ ", aId, df11.loc[df11["id"] == aId, "title"].item(), "_", tpFound)
-                print(1, bId, df22.loc[df22["id"] == bId, "description"].item(), " _ ", aId,   df11.loc[df11["id"] == aId, "description"].item())
-                print("============================================================================================")
+                title2 = df22.loc[df22["id"] == bId, "title"].item()
+                title1 = df11.loc[df11["id"] == aId, "title"].item()
+                mt1 = get_minhash_vector(title1)
+                mt2 = get_minhash_vector(title2)
+                d_ = j_distance1 = jaccard(mt1, mt2)
+                if  d_ > 0.2 and tpFound==False:
+                    fp += 1
+                    fps.add(idB)
+                if d_ < 0.2 and tpFound == False:
+                    tp+=1
+                    tps.add(idB)
+                    print(bId, df22.loc[df22["id"] == bId,"title"].item() ," _ ", aId, df11.loc[df11["id"] == aId, "title"].item(), "_", tpFound)
+                    print(bId, df22.loc[df22["id"] == bId, "description"].item(), " _ ", aId,   df11.loc[df11["id"] == aId, "description"].item())
+                    print("============================================================================================")
             #else:
                 #print(3,bId, df22.loc[df22["id"] == bId,"title"].item() ," _ ", aId, df11.loc[df11["id"] == aId, "title"].item(), "_", tpFound)
 
-          else:
-              print(0, bId, df22.loc[df22["id"] == bId, "title"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "title"].item())
-              print(0, bId, df22.loc[df22["id"] == bId, "description"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "description"].item())
-              print("============================================================================================")
+          #else:
+              #print(0, bId, df22.loc[df22["id"] == bId, "title"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "title"].item())
+              #print(0, bId, df22.loc[df22["id"] == bId, "description"].item(), " _ ", aId, df11.loc[df11["id"] == aId, "description"].item())
+              #print("============================================================================================")
 
 
     end_time = time.time()
-    print(f"{tp} {fp}  recall={round(tp / matches, 2)} precision={round(tp / (0.0001 + tp + fp), 2)} total matching time={end_time-start_time} seconds.")
+    print(f"{len(tps)} {len(fps)}  recall={round(tp / matches, 2)} precision={round(tp / (0.0001 + tp + fp), 2)} total matching time={end_time-start_time} seconds.")
