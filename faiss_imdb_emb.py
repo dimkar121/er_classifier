@@ -9,12 +9,19 @@ import jellyfish
 
 
 if __name__ == '__main__':
+    df11 = pd.read_parquet(f"./data/imdb_tuned.pqt")
+    df22 = pd.read_parquet(f"./data/dbpedia_tuned.pqt")
+    df11['id'] = pd.to_numeric(df11['id'], errors='coerce')
+    df22['id'] = pd.to_numeric(df22['id'], errors='coerce')
+
     truth = pd.read_csv("./data/truth_imdb_dbpedia.csv", sep="|", encoding="unicode_escape", keep_default_na=False)
     truthD = dict()
     a = 0
     for i, r in truth.iterrows():
         idimdb = r["D1"]
         iddbpedia = r["D2"]
+        if not idimdb in df11['id'].values or not iddbpedia in df22['id'].values:
+            continue
         if idimdb in truthD:
             ids = truthD[idimdb]
             ids.append(iddbpedia)
@@ -43,11 +50,8 @@ if __name__ == '__main__':
     batch_size = 10_000
     num_candidates = 5
     d = 384
-    phi = 0.10520531820505105065205350
-    df11 = pd.read_parquet(f"./data/imdb_tuned.pqt")
-    df22 = pd.read_parquet(f"./data/dbpedia_tuned.pqt")
-    df11['id'] = pd.to_numeric(df11['id'], errors='coerce')
-    df22['id'] = pd.to_numeric(df22['id'], errors='coerce')
+    phi = 0.410520531820505105065205350
+
     minhash_titles1 = {row['id']: row['title_v'] for index, row in df11.iterrows()}
     minhash_titles2 = {row['id']: row['title_v'] for index, row in df22.iterrows()}
     minhash_actors1 = {row['id']: row['starring_v'] for index, row in df11.iterrows()}
@@ -65,28 +69,30 @@ if __name__ == '__main__':
     index = faiss.IndexHNSWFlat(d, 32)
     index.hnsw.efConstruction = 60
     index.hnsw.efSearch = 16
-    index.add(dbpedia_embeddings)
+    index.add(imdb_embeddings)
 
     tp = 0
     fp = 0
     start_time = time.time()
 
+    df1_indexed = df11.set_index('id')
+    df2_indexed = df22.set_index('id')
 
-    for i in range(0, len(vectors_imdb), batch_size):
+    for i in range(0, len(vectors_dbpedia), batch_size):
 
-        imdbs = imdb_embeddings[i: i + batch_size]
-        imdb_ids_in_batch = imdb_ids[i: i + batch_size]
-        distances, candidate_indices = index.search(imdbs, num_candidates)  # return scholars
+        dbpedias = dbpedia_embeddings[i: i + batch_size]
+        dbpedia_ids_in_batch = dbpedia_ids[i: i + batch_size]
+        distances, candidate_indices = index.search(dbpedias, num_candidates)  # return scholars
 
         flat_candidate_ids = candidate_indices.flatten()
-        candidate_dbpedia_embeddings = dbpedia_embeddings[flat_candidate_ids]
-        repeated_imdb_embeddings = np.repeat(imdbs, num_candidates, axis=0)
-        repeated_imdb_ids = np.repeat(imdb_ids_in_batch, num_candidates)
+        candidate_imdb_embeddings = imdb_embeddings[flat_candidate_ids]
+        repeated_dbpedia_embeddings = np.repeat(dbpedias, num_candidates, axis=0)
+        repeated_dbpedia_ids = np.repeat(dbpedia_ids_in_batch, num_candidates)
 
 
         features_list = []
-        dbpedia_ids_in_batch = dbpedia_ids[flat_candidate_ids]
-        for dbpediaId_, imdbId_ in zip(dbpedia_ids_in_batch, repeated_imdb_ids):
+        imdb_ids_in_batch = imdb_ids[flat_candidate_ids]
+        for imdbId_, dbpediaId_ in zip(imdb_ids_in_batch, repeated_dbpedia_ids):
             minhash_title1 = minhash_titles1[imdbId_]
             minhash_title2 = minhash_titles2[dbpediaId_]
             minhash_actor1 = minhash_actors1[imdbId_]
@@ -102,7 +108,7 @@ if __name__ == '__main__':
         features_array = np.array(features_list, dtype='float32')
 
 
-        combined_embeddings = np.concatenate([candidate_dbpedia_embeddings, repeated_imdb_embeddings], axis=1)
+        combined_embeddings = np.concatenate([candidate_imdb_embeddings, repeated_dbpedia_embeddings], axis=1)
 
         emb1_batch = combined_embeddings[:, :384]
         emb2_batch = combined_embeddings[:, 384:]
@@ -124,17 +130,16 @@ if __name__ == '__main__':
 
         predicted_statuses = (predictions > phi).astype(int).flatten()
 
-        for predicted_status, dbpedia_ind, imdbId in zip(predicted_statuses, candidate_indices.flatten(), repeated_imdb_ids):
+        for predicted_status, imdb_ind, dbpediaId in zip(predicted_statuses, candidate_indices.flatten(), repeated_dbpedia_ids):
 
           if predicted_status == 1:
-            dbpediaId = imdb_ids[dbpedia_ind]
-            if imdbId in truthD.keys():
+             imdbId = imdb_ids[imdb_ind]
+             if imdbId in truthD.keys():
                 iddbpedia = truthD[imdbId]
                 if iddbpedia == dbpediaId:
                        tp += 1
                 else:
                        fp += 1
-
-
+             #print(df1_indexed.loc[imdbId, 'title'], "--", df2_indexed.loc[dbpediaId, 'title'] )
     end_time = time.time()
-    print(f"{tp} {fp} recall={round(tp / matches, 2)} precision={round(tp / (tp + fp), 2)} total matching time={end_time-start_time} seconds.")
+    print(f" recall={round(tp / matches, 2)} precision={round(tp / (tp + fp), 2)} total matching time={end_time-start_time} seconds.")

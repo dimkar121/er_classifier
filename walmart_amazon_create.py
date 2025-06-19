@@ -13,10 +13,51 @@ import utilities
 
 folder="./data"
 
-def fine_tune(text_columns_imdb, text_columns_dbpedia):
-    df1 = pd.read_parquet(f"./data/imdb.pqt")
-    df2 = pd.read_parquet(f"./data/dbpedia.pqt")
-    gold_standard = pd.read_csv(f"./data/truth_imdb_dbpedia.csv", sep="|", encoding="utf-8", keep_default_na=False)
+def fine_tune(text_columns_walmart, text_columns_amazon):
+    df1 = pd.read_parquet(f"./data/walmart_products.pqt")
+    df2 = pd.read_parquet(f"./data/amazon_products.pqt")
+    gold_standard = pd.read_csv(f"./data/truth_amazon_walmart.tsv", sep="\t", encoding="utf-8", keep_default_na=False)
+    gold_standard['id1'] = pd.to_numeric(gold_standard['id1'])
+    gold_standard['id2'] = pd.to_numeric(gold_standard['id2'])
+
+    mask_to_keep = pd.to_numeric(df1['id'], errors='coerce').notna()
+    # 3. Apply the mask to the DataFrame to keep only the good rows.
+    df_cleaned = df1[mask_to_keep].copy()
+    # Optional: Now that all rows are clean, you can safely cast the 'id' column to integer.
+    df_cleaned['id'] = df_cleaned['id'].astype(int)
+    df_cleaned.to_parquet(f"./data/walmart_products.pqt")
+
+    mask_to_keep = pd.to_numeric(df2['id'], errors='coerce').notna()
+    # 3. Apply the mask to the DataFrame to keep only the good rows.
+    df_cleaned = df2[mask_to_keep].copy()
+    # Optional: Now that all rows are clean, you can safely cast the 'id' column to integer.
+    df_cleaned['id'] = df_cleaned['id'].astype(int)
+    df_cleaned.to_parquet(f"./data/amazon_products.pqt")
+
+    '''
+    error_mask = pd.to_numeric(df1['id'], errors='coerce').isna()
+    # 3. Filter the original DataFrame using the mask to show only the problem rows
+    problematic_rows = df1[error_mask]
+    # 4. Print the results
+    print("\n--- Rows causing the conversion error A---")
+    if problematic_rows.empty:
+        print("No problematic rows found.")
+    else:
+        print(problematic_rows)
+
+    error_mask = pd.to_numeric(df2['id'], errors='coerce').isna()
+    # 3. Filter the original DataFrame using the mask to show only the problem rows
+    problematic_rows = df1[error_mask]
+    # 4. Print the results
+    print("\n--- Rows causing the conversion error B---")
+    if problematic_rows.empty:
+        print("No problematic rows found.")
+    else:
+        print(problematic_rows)
+    exit()
+    '''
+    df1 = pd.read_parquet(f"./data/walmart_products.pqt")
+    df2 = pd.read_parquet(f"./data/amazon_products.pqt")
     df1['id'] = pd.to_numeric(df1['id'])
     df2['id'] = pd.to_numeric(df2['id'])
     a_embeddings = df1['v'].tolist()
@@ -25,71 +66,89 @@ def fine_tune(text_columns_imdb, text_columns_dbpedia):
     faiss_db = faiss.IndexHNSWFlat(d, 32)
     faiss_db.hnsw.efConstruction = 60
     faiss_db.hnsw.efSearch = 16
-    datav = np.array(a_embeddings).astype(np.float32)
+    datav = np.array(b_embeddings).astype(np.float32)
     faiss_db.add(datav)
     ids1_ = df1['id'].tolist()
 
 
     training_triplets_ids = []
     k = 10  # Number of nearest neighbors to search for
+    '''
+    main_id_set = set(df1['id'].values)
+    gold_id_set = set(gold_standard['id2'].values)
+    missing_ids = gold_id_set.difference(main_id_set)
+    if not missing_ids:
+        print("Success! All gold standard IDs are present in the main DataFrame.")
+    else:
+        print(f"Error: The following {len(missing_ids)} IDs from the gold standard were NOT found in df1:")
+        print(list(missing_ids))
+
+    exit()
+    '''
+    #gold_standard id1 -> amazon   gold_standard id2 -> walmart
 
     for index, row in gold_standard.iterrows():
-        b_id = row['D2']
-        positive_a_id = row['D1']
+        a_id = row['id2']
+        positive_b_id = row['id1']
 
-        if not positive_a_id in df1['id'].values or not b_id in df2['id'].values:
+        if not positive_b_id in df2['id'].values or not a_id in df1['id'].values:
+            print("lalalkis", a_id, positive_b_id)
             continue
 
         # Get the index (row number) of the Google record
-        anchor_idx = df2[df2['id'] == b_id].index[0]
+        anchor_idx = df1[df1['id'] == a_id].index[0]
 
         # Get the corresponding embedding for the anchor (Google product)
-        anchor_embedding = b_embeddings[anchor_idx].reshape(1, -1).astype(np.float32)
+
+        if anchor_idx >= len(a_embeddings):
+            print("Problem",anchor_idx, len(a_embeddings) )
+            continue
+        anchor_embedding = a_embeddings[anchor_idx].reshape(1, -1).astype(np.float32)
 
         # Search FAISS for the k nearest neighbors in the Amazon dataset
         distances, indices = faiss_db.search(anchor_embedding, k)
 
         # The result 'indices' is a 2D array, so we take the first row
-        neighbor_a_indices = indices[0]
+        neighbor_b_indices = indices[0]
 
         # Find the first neighbor that is NOT the true positive match
-        hard_negative_a_ids = []
-        for a_idx in neighbor_a_indices:
+        hard_negative_b_ids = []
+        for b_idx in neighbor_b_indices:
             # Get the actual ID from the index
-            potential_neg_id = df1.iloc[a_idx]['id']
+            potential_neg_id = df2.iloc[b_idx]['id']
 
-            if potential_neg_id != positive_a_id:
-                hard_negative_a_ids.append(potential_neg_id)
+            if potential_neg_id != positive_b_id:
+                hard_negative_b_ids.append(potential_neg_id)
 
 
-            if len(hard_negative_a_ids)==2:
+            if len(hard_negative_b_ids)==2:
                 break  # We found our hard negatives, so we can stop searching
 
-        easy_negative_a_ids = []
+        easy_negative_b_ids = []
         while True:
             # Select a completely random product from the buy dataset
-            random_a_record = df1.sample(1).iloc[0]
+            random_b_record = df2.sample(1).iloc[0]
             # Make sure it's not the actual positive match
-            if random_a_record['id'] != positive_a_id:
-                easy_negative_a_ids.append(random_a_record['id'])
+            if random_b_record['id'] != positive_b_id:
+                easy_negative_b_ids.append(random_b_record['id'])
 
-            if len(easy_negative_a_ids) == 1:
+            if len(easy_negative_b_ids) == 1:
                  break
 
 
         # If we found a valid hard negative, store the triplet of IDs
-        if hard_negative_a_ids and easy_negative_a_ids:
-            for hard_negative_a_id in hard_negative_a_ids:
+        if hard_negative_b_ids and easy_negative_b_ids:
+            for hard_negative_b_id in hard_negative_b_ids:
                training_triplets_ids.append({
-                 'b_id': b_id,
-                 'positive_a_id': positive_a_id,
-                 'negative_a_id': hard_negative_a_id
+                 'a_id': a_id,
+                 'positive_b_id': positive_b_id,
+                 'negative_b_id': hard_negative_b_id
                })
-            for easy_negative_a_id in easy_negative_a_ids:
+            for easy_negative_b_id in easy_negative_b_ids:
               training_triplets_ids.append({
-                'b_id': b_id,
-                'positive_a_id': positive_a_id,
-                'negative_a_id': easy_negative_a_id,
+                'a_id': a_id,
+                'positive_b_id': positive_b_id,
+                'negative_b_id': easy_negative_b_id,
                 'type': 'easy'
               })
 
@@ -99,9 +158,8 @@ def fine_tune(text_columns_imdb, text_columns_dbpedia):
     print("\n--- 3. Creating InputExample objects for training ---")
     train_examples = []
 
-
-    df1['combined_text'] = df1[text_columns_imdb].fillna('').apply(lambda row: ' '.join(row), axis=1)
-    df2['combined_text'] = df2[text_columns_dbpedia].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    df1['combined_text'] = df1[text_columns_walmart].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    df2['combined_text'] = df2[text_columns_amazon].fillna('').apply(lambda row: ' '.join(row), axis=1)
     df1['combined_text'] = df1['combined_text'].str.lower()
     df2['combined_text'] = df2['combined_text'].str.lower()
     a_id_to_text = pd.Series(df1.combined_text.values, index=df1.id).to_dict()
@@ -111,9 +169,9 @@ def fine_tune(text_columns_imdb, text_columns_dbpedia):
     sentences2 = []
     labels = []
     for triplet in training_triplets_ids:
-        anchor_text =   b_id_to_text.get(triplet['b_id'])
-        positive_text = a_id_to_text.get(triplet['positive_a_id'])
-        negative_text = a_id_to_text.get(triplet['negative_a_id'])
+        anchor_text =   a_id_to_text.get(triplet['a_id'])
+        positive_text = b_id_to_text.get(triplet['positive_b_id'])
+        negative_text = b_id_to_text.get(triplet['negative_b_id'])
 
         if anchor_text and positive_text and negative_text:
             train_examples.append(InputExample(texts=[anchor_text, positive_text, negative_text]))  #this is for tripletloss
@@ -161,7 +219,7 @@ def fine_tune(text_columns_imdb, text_columns_dbpedia):
     # Configure the training
     num_epochs = 1  # 1-4 epochs is usually sufficient for fine-tuning on this task.
     warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)  # 10% of training steps for warm-up
-    output_model_path = './data/imdb_dbpedia-finetuned-model'  # The path where the new model will be saved
+    output_model_path = './data/walmart_amazon-finetuned-model'  # The path where the new model will be saved
 
     evaluator = evaluation.BinaryClassificationEvaluator(
         sentences1=sentences1,
@@ -257,52 +315,72 @@ if __name__ == '__main__':
     model_name = 'all-MiniLM-L6-v2'
     #model_name = "all-mpnet-base-v2"
     #model_name = "roberta-base-nli-stsb-mean-tokens"
-    '''
-    df1 = pd.read_csv(f'{folder}/imdb.csv', sep="|", dtype=str)
-    print("df1",len(df1))
-    df2 = pd.read_csv(f'{folder}/dbpedia.csv', sep="|", dtype=str)
-    print("df2=",len(df2))
 
-    mask_to_keep = df1['title'].notna() & (df1['title'].str.strip() != '')
-    df1 = df1[mask_to_keep]
-    mask_to_keep = df2['title'].notna() & (df2['title'].str.strip() != '')
-    df2 = df2[mask_to_keep]
-    df1.to_csv(f'{folder}/imdb.csv', index=False)
-    df2.to_csv(f'{folder}/dbpedia.csv', index=False)
-    print("df1", len(df1))
-    print("df2", len(df2))
+
+    '''
+    df = pd.read_csv(f'{folder}/amazon_walmart.tsv', sep='\t', dtype=str)
+
+    is_amazon = df['dataset'] == 'amazon'
+    is_walmart = df['dataset'] == 'walmart'
+
+    # 3. Use the masks to filter the original DataFrame into two new ones.
+    df_amazon = df[is_amazon].copy()
+    df_walmart = df[is_walmart].copy()
+
+    # Optional: Drop the 'dataset' column if you no longer need it in the final files.
+    df_amazon = df_amazon.drop(columns=['dataset'])
+    df_walmart = df_walmart.drop(columns=['dataset'])
+
+
+    # 4. Save each new DataFrame to its own CSV file.
+    # We use index=False to prevent writing the row numbers to the file.
+    amazon_filename = f'{folder}/amazon_products.csv'
+    walmart_filename = f'{folder}/walmart_products.csv'
+
+    df_amazon.to_csv(amazon_filename, index=False)
+    df_walmart.to_csv(walmart_filename, index=False)
+
     exit()
+    '''
+
     '''
     embedding_model = SentenceTransformer(model_name)
 
     embed(
-        input_filename=f'{folder}/imdb.csv',
-        output_filename=f'{folder}/imdb.pqt',
-        text_columns=["title", "starring"],
+        input_filename=f'{folder}/walmart_products.csv',
+        output_filename=f'{folder}/walmart_products.pqt',
+        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+                      "shortdescr", "techdetails", "title"],
         model=embedding_model
     )
     embed(
-        input_filename=f'{folder}/dbpedia.csv',
-        output_filename=f'{folder}/dbpedia.pqt',
-        text_columns=["title", "actor name"],
+        input_filename=f'{folder}/amazon_products.csv',
+        output_filename=f'{folder}/amazon_products.pqt',
+        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+                      "shortdescr", "techdetails", "title"],
         model=embedding_model
     )
+    '''
 
-    fine_tune(["title","starring"], ["title", "actor name"])
+    fine_tune(["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+                      "shortdescr", "techdetails", "title"], ["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+                      "shortdescr", "techdetails", "title"])
 
 
-    model_path = f'{folder}/imdb_dbpedia-finetuned-model'
+    model_path = f'{folder}/walmart_amazon-finetuned-model'
     embedding_model = SentenceTransformer(model_path)
     embed(
-        input_filename=f'{folder}/imdb.csv',
-        output_filename=f'{folder}/imdb_tuned.pqt',
-        text_columns=["title","starring"],
+        input_filename=f'{folder}/walmart_products.csv',
+        output_filename=f'{folder}/walmart_products_tuned.pqt',
+        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+                      "shortdescr", "techdetails", "title"],
         model=embedding_model
     )
     embed(
-        input_filename=f'{folder}/dbpedia.csv',
-        output_filename=f'{folder}/dbpedia_tuned.pqt',
-        text_columns=["title", "actor name"],
+        input_filename=f'{folder}/amazon_products.csv',
+        output_filename=f'{folder}/amazon_products_tuned.pqt',
+        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+                      "shortdescr", "techdetails", "title"],
         model=embedding_model
     )
 

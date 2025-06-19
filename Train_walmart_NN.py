@@ -28,12 +28,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 # --- Example: Data Preparation (Simplified) ---
 # This is a conceptual illustration. You'll need to implement the actual lookup
 # and pairing logic robustly.
-name="imdb_dbpedia"
-files1 =["imdb"] #["votersA"] # ["Scholar"] #["Abt"] #["Scholar"] #["Amazon", "Scholar", "votersA"] #["Scholar"] # ["Amazon", "Scholar", "votersA"]   #"Abt" # "Scholar"  #"Abt" # "ACM" #
-files2 = ["dbpedia"] #["votersB"] #["DBLP2"] # ["Buy"] #["DBLP2"] #["Google", "DBLP2" , "votersB"] #["DBLP2"] #["Google", "DBLP2" , "votersB"]  # "Buy" #"DBLP2" # #"DBLP" #
-files3 =["imdb_dbpedia"] # ["voters"] #["Scholar_DBLP"] # ["abt_buy"] #["Scholar_DBLP"] #["Amazon_googleProducts", "Scholar_DBLP", "voters"] #["Scholar_DBLP"] #["Amazon_googleProducts", "Scholar_DBLP", "voters"]# "abt_buy" #"Scholar_DBLP" # # "ACM_DBLP" #
-id1dfs = ["D1"] #["id1"] # ["idScholar"] # ["idAbt"] #["idScholar"] # ["idAmazon", "idScholar", "id1"] #["idScholar"] #["idAmazon", "idScholar", "id1"] #"idAbt" #"idScholar" # "idAbt"  #"idACM" # #gold standard columns
-id2dfs = ["D2"] #["id2"] # ["idDBLP"]  #["idBuy"] #["idDBLP"] # ["idGoogleBase", "idDBLP", "id2"] #["idDBLP"] #["idGoogleBase", "idDBLP", "id2"] #  "idBuy" # "idDBLP" #"idBuy" #"idDBLP" #
+name="walmart_amazon"
+files1 =["walmart_products"] #["votersA"] # ["Scholar"] #["Abt"] #["Scholar"] #["Amazon", "Scholar", "votersA"] #["Scholar"] # ["Amazon", "Scholar", "votersA"]   #"Abt" # "Scholar"  #"Abt" # "ACM" #
+files2 = ["amazon_products"] #["votersB"] #["DBLP2"] # ["Buy"] #["DBLP2"] #["Google", "DBLP2" , "votersB"] #["DBLP2"] #["Google", "DBLP2" , "votersB"]  # "Buy" #"DBLP2" # #"DBLP" #
+files3 =["amazon_walmart"] # ["voters"] #["Scholar_DBLP"] # ["abt_buy"] #["Scholar_DBLP"] #["Amazon_googleProducts", "Scholar_DBLP", "voters"] #["Scholar_DBLP"] #["Amazon_googleProducts", "Scholar_DBLP", "voters"]# "abt_buy" #"Scholar_DBLP" # # "ACM_DBLP" #
+id1dfs = ["id1"] #["id1"] # ["idScholar"] # ["idAbt"] #["idScholar"] # ["idAmazon", "idScholar", "id1"] #["idScholar"] #["idAmazon", "idScholar", "id1"] #"idAbt" #"idScholar" # "idAbt"  #"idACM" # #gold standard columns
+id2dfs = ["id2"] #["id2"] # ["idDBLP"]  #["idBuy"] #["idDBLP"] # ["idGoogleBase", "idDBLP", "id2"] #["idDBLP"] #["idGoogleBase", "idDBLP", "id2"] #  "idBuy" # "idDBLP" #"idBuy" #"idDBLP" #
 num_candidates = 5
 X_data = []
 y_data = []
@@ -42,17 +42,19 @@ X_features = []
 
 embedding_dim = 384 # Or df1['v'][0].shape[0] if 'v' contains numpy arrays
 for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2dfs):
-  df1 = pd.read_parquet(f"./data/imdb_tuned.pqt")
+  df1 = pd.read_parquet(f"./data/walmart_products_tuned.pqt")
   df1['id'] = pd.to_numeric(df1['id'], errors='coerce')
 
-  df2 = pd.read_parquet(f"./data/dbpedia_tuned.pqt")
+  df2 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")
   df2['id'] = pd.to_numeric(df2['id'], errors='coerce')
 
-  gold_standard = pd.read_csv(f"./data/truth_{file3}.csv", sep="|", encoding="utf-8", keep_default_na=False)
+  gold_standard = pd.read_csv(f"./data/truth_{file3}.tsv", sep="\t", encoding="utf-8", keep_default_na=False)
+  gold_standard['id1'] = pd.to_numeric(gold_standard['id1'])
+  gold_standard['id2'] = pd.to_numeric(gold_standard['id2'])
   minhash_titles1 = {row['id']: row['title_v'] for index, row in df1.iterrows()}
   minhash_titles2 = {row['id']: row['title_v'] for index, row in df2.iterrows()}
-  minhash_actors1 = {row['id']: row['starring_v'] for index, row in df1.iterrows()}
-  minhash_actors2 = {row['id']: row['actor name_v'] for index, row in df2.iterrows()}
+  minhash_descrs1 = {row['id']: row['shortdescr_v'] for index, row in df1.iterrows()}
+  minhash_descrs2 = {row['id']: row['shortdescr_v'] for index, row in df2.iterrows()}
   titles1 = {row['id']: row['title'] for index, row in df1.iterrows()}
   titles2 = {row['id']: row['title'] for index, row in df2.iterrows()}
 
@@ -86,8 +88,8 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
 
         minhash_title1 = minhash_titles1[id1]
         minhash_title2 = minhash_titles2[id2]
-        minhash_actor1 = minhash_actors1[id1]
-        minhash_actor2 = minhash_actors2[id2]
+        minhash_actor1 = minhash_descrs1[id1]
+        minhash_actor2 = minhash_descrs2[id2]
         j_distance1 = jaccard(minhash_title1, minhash_title2)
         j_distance2 = jaccard(minhash_actor1, minhash_actor2)
         j_similarity1 = 1 - j_distance1
@@ -110,7 +112,7 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
                   emb1 = embeddings1[id1_]
 
                   minhash_title1 = minhash_titles1[id1]
-                  minhash_actor1 = minhash_actors1[id1]
+                  minhash_actor1 = minhash_descrs1[id1]
                   j_distance1 = jaccard(minhash_title1, minhash_title2)
                   j_distance2 = jaccard(minhash_actor1, minhash_actor2)
                   j_similarity1 = 1 - j_distance1
@@ -150,8 +152,8 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
 
         minhash_title1 = minhash_titles1[random_id1]
         minhash_title2 = minhash_titles2[random_id2]
-        minhash_actor1 = minhash_actors1[random_id1]
-        minhash_actor2 = minhash_actors2[random_id2]
+        minhash_actor1 = minhash_descrs1[random_id1]
+        minhash_actor2 = minhash_descrs2[random_id2]
         j_distance1 = jaccard(minhash_title1, minhash_title2)
         j_distance2 = jaccard(minhash_actor1, minhash_actor2)
         j_similarity1 = 1 - j_distance1
