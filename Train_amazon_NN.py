@@ -409,8 +409,8 @@ x3 = Dense(32, activation='relu')(x3)
 # The output of this branch is the 'x2' tensor
 
 # --- Combine the branches ---
-combined = Concatenate()([x1, x2, x3])
-
+#combined = Concatenate()([x1, x2, x3])
+combined = Concatenate()([x1, x2])
 # --- Add a final classifier head ---
 
 final_dense = Dense(128, activation='relu')(combined)
@@ -420,7 +420,6 @@ output = Dense(1, activation='sigmoid', name='output')(final_dropout)
 
 # The model takes a list of inputs and produces a single output
 model = Model(inputs=[embedding_input, interactions_input, features_input], outputs=output)
-#model = Model(inputs=embedding_input, outputs=output)
 
 model.compile(optimizer='adam',
               loss='binary_crossentropy',

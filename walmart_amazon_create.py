@@ -14,11 +14,14 @@ import utilities
 folder="./data"
 
 def fine_tune(text_columns_walmart, text_columns_amazon):
-    df1 = pd.read_parquet(f"./data/walmart_products.pqt")
-    df2 = pd.read_parquet(f"./data/amazon_products.pqt")
+    df2 = pd.read_parquet(f"./data/walmart_products.pqt")
+    df1 = pd.read_parquet(f"./data/amazon_products.pqt")
+    #df2.dropna(subset=['id'], inplace=True)
+    #df2['id'] = df2['id'].astype(int)
+
     gold_standard = pd.read_csv(f"./data/truth_amazon_walmart.tsv", sep="\t", encoding="utf-8", keep_default_na=False)
-    gold_standard['id1'] = pd.to_numeric(gold_standard['id1'])
-    gold_standard['id2'] = pd.to_numeric(gold_standard['id2'])
+    gold_standard['id1'] = gold_standard['id1'].astype(int)
+    gold_standard['id2'] = gold_standard['id2'].astype(int)
 
     mask_to_keep = pd.to_numeric(df1['id'], errors='coerce').notna()
     # 3. Apply the mask to the DataFrame to keep only the good rows.
@@ -26,6 +29,7 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     # Optional: Now that all rows are clean, you can safely cast the 'id' column to integer.
     df_cleaned['id'] = df_cleaned['id'].astype(int)
     df_cleaned.to_parquet(f"./data/walmart_products.pqt")
+    df1 = df_cleaned
 
     mask_to_keep = pd.to_numeric(df2['id'], errors='coerce').notna()
     # 3. Apply the mask to the DataFrame to keep only the good rows.
@@ -33,6 +37,7 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     # Optional: Now that all rows are clean, you can safely cast the 'id' column to integer.
     df_cleaned['id'] = df_cleaned['id'].astype(int)
     df_cleaned.to_parquet(f"./data/amazon_products.pqt")
+    df2 = df_cleaned
 
     '''
     error_mask = pd.to_numeric(df1['id'], errors='coerce').isna()
@@ -56,10 +61,18 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
         print(problematic_rows)
     exit()
     '''
-    df1 = pd.read_parquet(f"./data/walmart_products.pqt")
-    df2 = pd.read_parquet(f"./data/amazon_products.pqt")
-    df1['id'] = pd.to_numeric(df1['id'])
-    df2['id'] = pd.to_numeric(df2['id'])
+    #df1 = pd.read_parquet(f"./data/walmart_products.pqt")
+    #df2 = pd.read_parquet(f"./data/amazon_products.pqt")
+
+    df1['id'] = pd.to_numeric(df1['id'], errors='coerce')
+    df1.dropna(subset=['id'], inplace=True)
+    df1['id'] = df1['id'].astype(int)
+
+    df2['id'] = pd.to_numeric(df2['id'], errors='coerce')
+    df2.dropna(subset=['id'], inplace=True)
+    df2['id'] = df2['id'].astype(int)
+
+
     a_embeddings = df1['v'].tolist()
     b_embeddings = df2['v'].tolist()
     d = 384
@@ -72,7 +85,7 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
 
 
     training_triplets_ids = []
-    k = 10  # Number of nearest neighbors to search for
+    k = 15  # Number of nearest neighbors to search for
     '''
     main_id_set = set(df1['id'].values)
     gold_id_set = set(gold_standard['id2'].values)
@@ -88,11 +101,11 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     #gold_standard id1 -> amazon   gold_standard id2 -> walmart
 
     for index, row in gold_standard.iterrows():
-        a_id = row['id2']
-        positive_b_id = row['id1']
+        a_id = row['id1']
+        positive_b_id = row['id2']
 
         if not positive_b_id in df2['id'].values or not a_id in df1['id'].values:
-            print("lalalkis", a_id, positive_b_id)
+            print("Either of these is orphan", a_id, positive_b_id)
             continue
 
         # Get the index (row number) of the Google record
@@ -158,12 +171,12 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     print("\n--- 3. Creating InputExample objects for training ---")
     train_examples = []
 
-    df1['combined_text'] = df1[text_columns_walmart].fillna('').apply(lambda row: ' '.join(row), axis=1)
-    df2['combined_text'] = df2[text_columns_amazon].fillna('').apply(lambda row: ' '.join(row), axis=1)
-    df1['combined_text'] = df1['combined_text'].str.lower()
-    df2['combined_text'] = df2['combined_text'].str.lower()
-    a_id_to_text = pd.Series(df1.combined_text.values, index=df1.id).to_dict()
-    b_id_to_text = pd.Series(df2.combined_text.values, index=df2.id).to_dict()
+    #df1['combined_text'] = df1[text_columns_walmart].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    #df2['combined_text'] = df2[text_columns_amazon].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    #df1['combined_text'] = df1['combined_text'].str.lower()
+    #df2['combined_text'] = df2['combined_text'].str.lower()
+    a_id_to_text = pd.Series(df1.title.values, index=df1.id).to_dict()
+    b_id_to_text = pd.Series(df2.title.values, index=df2.id).to_dict()
 
     sentences1 = []
     sentences2 = []
@@ -262,6 +275,8 @@ def embed(input_filename, output_filename, text_columns, model):
 
     # Load the table, reading all data as strings to be safe
     df = pd.read_csv(input_filename, sep=",", dtype=str)
+    print(f"Number of rows:{len(df)}")
+
     # --- Step 1: Prepare text data ---
     # Fill any missing values in text columns with an empty string
 
@@ -302,6 +317,7 @@ def embed(input_filename, output_filename, text_columns, model):
     # Drop the temporary combined_text column
     df.drop(columns=['combined_text'], inplace=True)
     # Save the updated DataFrame to a new CSV file
+    print(f"Number of rows:{len(df)}")
     df.to_parquet(output_filename, engine="pyarrow")
 
     print(f"Successfully created '{output_filename}' with new feature columns.")
@@ -343,44 +359,50 @@ if __name__ == '__main__':
     exit()
     '''
 
-    '''
+
+
     embedding_model = SentenceTransformer(model_name)
 
     embed(
         input_filename=f'{folder}/walmart_products.csv',
         output_filename=f'{folder}/walmart_products.pqt',
-        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
-                      "shortdescr", "techdetails", "title"],
+        text_columns=["brand",  "category",  "modelno","shortdescr", "longdescr","price", "title"],
+        #text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+        #              "shortdescr", "techdetails", "title"],
         model=embedding_model
     )
     embed(
         input_filename=f'{folder}/amazon_products.csv',
         output_filename=f'{folder}/amazon_products.pqt',
-        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
-                      "shortdescr", "techdetails", "title"],
+        text_columns=["brand", "category", "modelno", "shortdescr", "longdescr", "price", "title"],
+        #text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+        #              "shortdescr", "techdetails", "title"],
         model=embedding_model
     )
-    '''
 
-    fine_tune(["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
-                      "shortdescr", "techdetails", "title"], ["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
-                      "shortdescr", "techdetails", "title"])
 
+    #fine_tune(["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+    #                  "shortdescr", "techdetails", "title"], ["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+    #                  "shortdescr", "techdetails", "title"])
+    fine_tune(["brand", "category",  "modelno", "shortdescr", "longdescr","price", "title"],
+              ["brand",  "category",  "modelno", "shortdescr","longdescr", "price", "title"])
 
     model_path = f'{folder}/walmart_amazon-finetuned-model'
     embedding_model = SentenceTransformer(model_path)
     embed(
         input_filename=f'{folder}/walmart_products.csv',
         output_filename=f'{folder}/walmart_products_tuned.pqt',
-        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
-                      "shortdescr", "techdetails", "title"],
+        #text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+        #             "shortdescr", "techdetails", "title"],
+        text_columns=["brand", "category",   "modelno",  "shortdescr","longdescr","price", "title"],
         model=embedding_model
     )
     embed(
         input_filename=f'{folder}/amazon_products.csv',
         output_filename=f'{folder}/amazon_products_tuned.pqt',
-        text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
-                      "shortdescr", "techdetails", "title"],
+        #text_columns=["brand", "category", "dimensions", "longdescr", "modelno", "orig_techdetails", "price",
+        #              "shortdescr", "techdetails", "title"],
+        text_columns=["brand",  "category", "modelno", "shortdescr","longdescr","price", "title"],
         model=embedding_model
     )
 

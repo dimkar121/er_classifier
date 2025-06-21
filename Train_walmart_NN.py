@@ -18,16 +18,91 @@ import re
 import jellyfish
 import utilities
 from sklearn.metrics import precision_score, recall_score, f1_score
-
 from sklearn.metrics.pairwise import cosine_similarity
-# --- 1. Assume df1, df2, and gold_standard are loaded ---
-# df1: Parquet DataFrame with 'id' and 'v'
-# df2: Parquet DataFrame with 'id' and 'v'
-# gold_standard: DataFrame with ids
+from itertools import product
 
-# --- Example: Data Preparation (Simplified) ---
-# This is a conceptual illustration. You'll need to implement the actual lookup
-# and pairing logic robustly.
+def calculate_modelno_similarity(modelno1, modelno2):
+  """
+  Calculates the Jaro-Winkler similarity score between two model number strings.
+  """
+  # Convert to string and handle potential missing values
+  str1 = str(modelno1) if pd.notna(modelno1) else ""
+  str2 = str(modelno2) if pd.notna(modelno2) else ""
+  if not str1 or not str2:
+     return 0.0
+  return jellyfish.jaro_winkler_similarity(str1, str2)
+
+
+# --- 2. Category Similarity Feature ---
+
+def calculate_category_jaccard(cat1, cat2):
+    """
+    Calculates the Jaccard similarity of the words in the category strings.
+    """
+    # Simple cleaning: lowercase and split
+    set1 = set(str(cat1).lower().split())
+    set2 = set(str(cat2).lower().split())
+
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+
+    return intersection / union if union > 0 else 0.0
+
+
+# --- 3. Differing Tokens Count Feature ---
+
+def count_differing_tokens(title1, title2):
+    """
+    Counts the number of unique words that are in one title but not the other.
+    A higher count can indicate a non-match.
+    """
+    set1 = set(str(title1).lower().split())
+    set2 = set(str(title2).lower().split())
+
+    # Calculate the symmetric difference
+    return len(set1.symmetric_difference(set2))
+
+
+def model_number_match(modelno1, modelno2):
+    """
+    Checks if two model number strings are identical after cleaning.
+    Returns 1 for a match, 0 otherwise.
+    """
+    # Convert to string, clean, and handle potential missing values
+    str1 = str(modelno1).lower().strip() if pd.notna(modelno1) else ""
+    str2 = str(modelno2).lower().strip() if pd.notna(modelno2) else ""
+
+    # Return 1 only if both strings are valid and they are identical
+    if str1 and str2 and str1 == str2:
+        return 1
+    return 0
+
+
+def brand_match(brand1, brand2):
+    """
+    Checks if two brand strings are identical after cleaning.
+    Returns 1 for a match, 0 otherwise.
+    """
+    str1 = str(brand1).lower().strip() if pd.notna(brand1) else ""
+    str2 = str(brand2).lower().strip() if pd.notna(brand2) else ""
+
+    if str1 and str2 and str1 == str2:
+        return 1
+    return 0
+
+
+def calculate_brand_similarity(brand1, brand2):
+    """
+    Calculates the Jaro-Winkler similarity score between two brand strings.
+    """
+    str1 = str(brand1) if pd.notna(brand1) else ""
+    str2 = str(brand2) if pd.notna(brand2) else ""
+
+    if not str1 or not str2:
+        return 0.0
+
+    return jellyfish.jaro_winkler_similarity(str1, str2)
+
 name="walmart_amazon"
 files1 =["walmart_products"] #["votersA"] # ["Scholar"] #["Abt"] #["Scholar"] #["Amazon", "Scholar", "votersA"] #["Scholar"] # ["Amazon", "Scholar", "votersA"]   #"Abt" # "Scholar"  #"Abt" # "ACM" #
 files2 = ["amazon_products"] #["votersB"] #["DBLP2"] # ["Buy"] #["DBLP2"] #["Google", "DBLP2" , "votersB"] #["DBLP2"] #["Google", "DBLP2" , "votersB"]  # "Buy" #"DBLP2" # #"DBLP" #
@@ -42,21 +117,39 @@ X_features = []
 
 embedding_dim = 384 # Or df1['v'][0].shape[0] if 'v' contains numpy arrays
 for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2dfs):
-  df1 = pd.read_parquet(f"./data/walmart_products_tuned.pqt")
-  df1['id'] = pd.to_numeric(df1['id'], errors='coerce')
-
-  df2 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")
+  df2 = pd.read_parquet(f"./data/walmart_products_tuned.pqt")
   df2['id'] = pd.to_numeric(df2['id'], errors='coerce')
+  df2.dropna(subset=['id'], inplace=True)
+  df2['id'] = df2['id'].astype(int)
+
+  df1 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")
+  df1['id'] = pd.to_numeric(df1['id'], errors='coerce')
+  df1.dropna(subset=['id'], inplace=True)
+  df1['id'] = df1['id'].astype(int)
 
   gold_standard = pd.read_csv(f"./data/truth_{file3}.tsv", sep="\t", encoding="utf-8", keep_default_na=False)
-  gold_standard['id1'] = pd.to_numeric(gold_standard['id1'])
-  gold_standard['id2'] = pd.to_numeric(gold_standard['id2'])
+  gold_standard['id1'] = gold_standard['id1'].astype(int)
+  gold_standard['id2'] = gold_standard['id2'].astype(int)
+
+  #gold_standard['id1'] = pd.to_numeric(gold_standard['id1'])
+  #gold_standard['id2'] = pd.to_numeric(gold_standard['id2'])
   minhash_titles1 = {row['id']: row['title_v'] for index, row in df1.iterrows()}
   minhash_titles2 = {row['id']: row['title_v'] for index, row in df2.iterrows()}
-  minhash_descrs1 = {row['id']: row['shortdescr_v'] for index, row in df1.iterrows()}
-  minhash_descrs2 = {row['id']: row['shortdescr_v'] for index, row in df2.iterrows()}
+  minhash_models1 = {row['id']: row['modelno_v'] for index, row in df1.iterrows()}
+  minhash_models2 = {row['id']: row['modelno_v'] for index, row in df2.iterrows()}
+  minhash_categories1 = {row['id']: row['category_v'] for index, row in df1.iterrows()}
+  minhash_categories2 = {row['id']: row['category_v'] for index, row in df2.iterrows()}
+  minhash_brands1 = {row['id']: row['brand_v'] for index, row in df1.iterrows()}
+  minhash_brands2 = {row['id']: row['brand_v'] for index, row in df2.iterrows()}
+
   titles1 = {row['id']: row['title'] for index, row in df1.iterrows()}
   titles2 = {row['id']: row['title'] for index, row in df2.iterrows()}
+  categories1 = {row['id']: row['category'] for index, row in df1.iterrows()}
+  categories2 = {row['id']: row['category'] for index, row in df2.iterrows()}
+  brands1 = {row['id']: row['brand'] for index, row in df1.iterrows()}
+  brands2 = {row['id']: row['brand'] for index, row in df2.iterrows()}
+  models1 = {row['id']: row['modelno'] for index, row in df1.iterrows()}
+  models2 = {row['id']: row['modelno'] for index, row in df2.iterrows()}
 
   vectors1 = df1['v'].tolist()
   vectors2 = df2['v'].tolist()
@@ -64,9 +157,10 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
   faiss_db = faiss.IndexHNSWFlat(d, 32)
   faiss_db.hnsw.efConstruction = 60
   faiss_db.hnsw.efSearch = 16
-  datav = np.array(vectors1).astype(np.float32)
+  datav = np.array(vectors2).astype(np.float32)
   faiss_db.add(datav)
   ids1_ = df1['id'].tolist()
+  ids2_ = df2['id'].tolist()
 
   # Create dictionaries for quick embedding lookups
   embeddings1 = {row['id']: row['v'] for index, row in df1.iterrows()}
@@ -79,49 +173,80 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
   sampled_gold_standard = gold_standard.sample(n=num_samples_to_take, random_state=42, replace=False)
   # Positive Pairs
   for index, row in sampled_gold_standard.iterrows():
-      id1 = int(row[id1df])
-      id2 = int(row[id2df])
-      if id1 in embeddings1 and id2 in embeddings2:
+      id_amazon = int(row[id1df])
+      id_walmart = int(row[id2df])
 
-        emb1 = embeddings1[id1]
-        emb2 = embeddings2[id2]
+      if not id_amazon in df1['id'].values or not id_walmart in df2['id'].values:
+          print("Either of these is orphan", id_amazon, id_walmart)
+          continue
 
-        minhash_title1 = minhash_titles1[id1]
-        minhash_title2 = minhash_titles2[id2]
-        minhash_actor1 = minhash_descrs1[id1]
-        minhash_actor2 = minhash_descrs2[id2]
+
+      if id_amazon in embeddings1 and id_walmart in embeddings2:
+
+        emb1 = embeddings1[id_amazon]
+        emb2 = embeddings2[id_walmart]
+
+        minhash_title1 = minhash_titles1[id_amazon]
+        minhash_title2 = minhash_titles2[id_walmart]
+        minhash_model1 = minhash_models1[id_amazon]
+        minhash_model2 = minhash_models2[id_walmart]
         j_distance1 = jaccard(minhash_title1, minhash_title2)
-        j_distance2 = jaccard(minhash_actor1, minhash_actor2)
+        j_distance2 = jaccard(minhash_model1, minhash_model2)
         j_similarity1 = 1 - j_distance1
         j_similarity2 = 1 - j_distance2
-        title1 = titles1[id1]
-        title2 = titles2[id2]
+        title1 = titles1[id_amazon]
+        title2 = titles2[id_walmart]
         jw = jellyfish.jaro_winkler_similarity(str(title1), str(title2))
+        category1 = categories1[id_amazon]
+        category2 = categories2[id_walmart]
+        jw2 = jellyfish.jaro_winkler_similarity(str(category1), str(category2))
+        brand1 = brands1[id_amazon]
+        brand2 = brands2[id_walmart]
+        jw3 = jellyfish.jaro_winkler_similarity(str(brand1), str(brand2))
+        model1 = models1[id_amazon]
+        model2 = models2[id_walmart]
+        model_sim = calculate_modelno_similarity(model1, model2)
+        model_match = model_number_match(model1, model2)
+        cat_jac = calculate_category_jaccard(category1, category2)
+        tokens = count_differing_tokens(title1, title2)
+        brand_sim = calculate_brand_similarity(brand1, brand2)
+        brand_m = brand_match(brand1, brand2)
 
         # Ensure embeddings are numpy arrays and then concatenate
         combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-        features = np.array([j_similarity1, j_similarity2, jw])
+        features = np.array([ j_similarity1,  model_sim, model_match, brand_sim, brand_m])
         X_data.append(combined_embedding)
         X_features.append(features)
         y_data.append(1) # Match
 
-        distances, indices1 = faiss_db.search(np.array([emb2]), num_candidates)
+        distances, indices1 = faiss_db.search(np.array([emb1]), num_candidates)
         for ind, ds in zip(indices1[0], distances[0]):
-              id1_ =ids1_[ind]
-              if id1_ != id1:
-                  emb1 = embeddings1[id1_]
+              id_walmart_ =ids2_[ind]
+              if id_walmart_ != id_walmart and id_walmart_ in embeddings2:
+                  emb2 = embeddings2[id_walmart_]
 
-                  minhash_title1 = minhash_titles1[id1]
-                  minhash_actor1 = minhash_descrs1[id1]
+                  minhash_title2 = minhash_titles2[id_walmart_]
+                  minhash_model2 = minhash_models2[id_walmart_]
                   j_distance1 = jaccard(minhash_title1, minhash_title2)
-                  j_distance2 = jaccard(minhash_actor1, minhash_actor2)
+                  j_distance2 = jaccard(minhash_model1, minhash_model2)
                   j_similarity1 = 1 - j_distance1
                   j_similarity2 = 1 - j_distance2
-                  title1 = titles1[id1]
+                  title2 = titles2[id_walmart_]
                   jw = jellyfish.jaro_winkler_similarity(str(title1), str(title2))
+                  category2 = categories2[id_walmart_]
+                  jw2 = jellyfish.jaro_winkler_similarity(str(category1), str(category2))
+                  brand2 = brands2[id_walmart_]
+                  jw3 = jellyfish.jaro_winkler_similarity(str(brand1), str(brand2))
+                  model2 = models2[id_walmart_]
+                  model_sim = calculate_modelno_similarity(model1, model2)
+                  model_match = model_number_match(model1, model2)
+                  cat_jac = calculate_category_jaccard(category1, category2)
+                  tokens = count_differing_tokens(title1, title2)
+                  brand_sim = calculate_brand_similarity(brand1, brand2)
+                  brand_m = brand_match(brand1, brand2)
 
                   combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-                  features = np.array([j_similarity1, j_similarity2, jw])
+                  features = np.array([ j_similarity1,  model_sim, model_match, brand_sim, brand_m])
                   X_data.append(combined_embedding)
                   X_features.append(features)
                   y_data.append(0)
@@ -146,24 +271,38 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
     random_id1 = np.random.choice(all_ids_1)
     random_id2 = np.random.choice(all_ids_2)
 
-    if (random_id2, random_id1) not in gold_pairs_set:
+    if (random_id2, random_id1) not in gold_pairs_set and random_id1 in embeddings1 and  random_id2 in embeddings2:
         emb1 = embeddings1[random_id1]
         emb2 = embeddings2[random_id2]
 
         minhash_title1 = minhash_titles1[random_id1]
         minhash_title2 = minhash_titles2[random_id2]
-        minhash_actor1 = minhash_descrs1[random_id1]
-        minhash_actor2 = minhash_descrs2[random_id2]
+        minhash_model1 = minhash_models1[random_id1]
+        minhash_model2 = minhash_models2[random_id2]
         j_distance1 = jaccard(minhash_title1, minhash_title2)
-        j_distance2 = jaccard(minhash_actor1, minhash_actor2)
+        j_distance2 = jaccard(minhash_model1, minhash_model2)
         j_similarity1 = 1 - j_distance1
         j_similarity2 = 1 - j_distance2
         title1 = titles1[random_id1]
         title2 = titles2[random_id2]
         jw = jellyfish.jaro_winkler_similarity(str(title1), str(title2))
+        category1 = categories1[random_id1]
+        category2 = categories2[random_id2]
+        jw2 = jellyfish.jaro_winkler_similarity(str(category1), str(category2))
+        brand1 = brands1[random_id1]
+        brand2 = brands2[random_id2]
+        jw3 = jellyfish.jaro_winkler_similarity(str(brand1), str(brand2))
+        model1 = models1[random_id1]
+        model2 = models2[random_id2]
+        model_sim = calculate_modelno_similarity(model1, model2)
+        model_match = model_number_match(model1, model2)
+        cat_jac = calculate_category_jaccard(category1, category2)
+        tokens = count_differing_tokens(title1, title2)
+        brand_sim = calculate_brand_similarity(brand1, brand2)
+        brand_m = brand_match(brand1, brand2)
 
         combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-        features = np.array([j_similarity1, j_similarity2, jw])
+        features = np.array([j_similarity1, model_sim, model_match, brand_sim, brand_m])
         X_data.append(combined_embedding)
         X_features.append(features)
         y_data.append(0) # Non-match

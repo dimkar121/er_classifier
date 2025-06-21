@@ -65,6 +65,7 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
   datav = np.array(vectors1).astype(np.float32)
   faiss_db.add(datav)
   ids1_ = df1['id'].tolist()
+  ids2_ = df2['id'].tolist()
 
   # Create dictionaries for quick embedding lookups
   embeddings1 = {row['id']: row['v'] for index, row in df1.iterrows()}
@@ -109,8 +110,8 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
               if id1_ != id1:
                   emb1 = embeddings1[id1_]
 
-                  minhash_title1 = minhash_titles1[id1]
-                  minhash_actor1 = minhash_actors1[id1]
+                  minhash_title1 = minhash_titles1[id1_]
+                  minhash_actor1 = minhash_actors1[id1_]
                   j_distance1 = jaccard(minhash_title1, minhash_title2)
                   j_distance2 = jaccard(minhash_actor1, minhash_actor2)
                   j_similarity1 = 1 - j_distance1
