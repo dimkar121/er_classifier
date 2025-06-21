@@ -103,6 +103,20 @@ def calculate_brand_similarity(brand1, brand2):
 
     return jellyfish.jaro_winkler_similarity(str1, str2)
 
+def calculate_price_diff(price1, price2):
+    """Calculates the normalized difference between two prices."""
+    # Handle cases where price might be missing (None, NaN) or zero
+    try:
+        p1 = float(price1)
+        p2 = float(price2)
+    except (ValueError, TypeError):
+        return 0  # Return 0 if prices are not valid numbers
+
+    if max(p1, p2) == 0:
+        return 0
+
+    return abs(p1 - p2) / max(p1, p2)
+
 name="walmart_amazon"
 files1 =["walmart_products"] #["votersA"] # ["Scholar"] #["Abt"] #["Scholar"] #["Amazon", "Scholar", "votersA"] #["Scholar"] # ["Amazon", "Scholar", "votersA"]   #"Abt" # "Scholar"  #"Abt" # "ACM" #
 files2 = ["amazon_products"] #["votersB"] #["DBLP2"] # ["Buy"] #["DBLP2"] #["Google", "DBLP2" , "votersB"] #["DBLP2"] #["Google", "DBLP2" , "votersB"]  # "Buy" #"DBLP2" # #"DBLP" #
@@ -144,6 +158,8 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
 
   titles1 = {row['id']: row['title'] for index, row in df1.iterrows()}
   titles2 = {row['id']: row['title'] for index, row in df2.iterrows()}
+  prices1 = {row['id']: row['price'] for index, row in df1.iterrows()}
+  prices2 = {row['id']: row['price'] for index, row in df2.iterrows()}
   categories1 = {row['id']: row['category'] for index, row in df1.iterrows()}
   categories2 = {row['id']: row['category'] for index, row in df2.iterrows()}
   brands1 = {row['id']: row['brand'] for index, row in df1.iterrows()}
@@ -211,10 +227,15 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
         tokens = count_differing_tokens(title1, title2)
         brand_sim = calculate_brand_similarity(brand1, brand2)
         brand_m = brand_match(brand1, brand2)
-
+        price1 = prices1[id_amazon]
+        price2 = prices2[id_walmart]
+        price_diff = calculate_price_diff(price1, price2)
         # Ensure embeddings are numpy arrays and then concatenate
         combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-        features = np.array([ j_similarity1,  model_sim, model_match, brand_sim, brand_m])
+        #features = np.array([ j_similarity1,  model_sim, model_match, brand_sim, brand_m])
+        features = np.array([j_similarity1, model_match, price_diff, jw])
+
+        # amazon-google features = np.array([j_similarity1, j_similarity2, m, price_diff, jw])
         X_data.append(combined_embedding)
         X_features.append(features)
         y_data.append(1) # Match
@@ -244,9 +265,12 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
                   tokens = count_differing_tokens(title1, title2)
                   brand_sim = calculate_brand_similarity(brand1, brand2)
                   brand_m = brand_match(brand1, brand2)
-
+                  price2 = prices2[id_walmart_]
+                  price_diff = calculate_price_diff(price1, price2)
                   combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-                  features = np.array([ j_similarity1,  model_sim, model_match, brand_sim, brand_m])
+                  #features = np.array([ j_similarity1,  model_sim, model_match, brand_sim, brand_m])
+                  features = np.array([j_similarity1, model_match, price_diff, jw])
+
                   X_data.append(combined_embedding)
                   X_features.append(features)
                   y_data.append(0)
@@ -294,6 +318,9 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
         jw3 = jellyfish.jaro_winkler_similarity(str(brand1), str(brand2))
         model1 = models1[random_id1]
         model2 = models2[random_id2]
+        price1 = prices1[random_id1]
+        price2 = prices2[random_id2]
+        price_diff = calculate_price_diff(price1, price2)
         model_sim = calculate_modelno_similarity(model1, model2)
         model_match = model_number_match(model1, model2)
         cat_jac = calculate_category_jaccard(category1, category2)
@@ -302,7 +329,9 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
         brand_m = brand_match(brand1, brand2)
 
         combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-        features = np.array([j_similarity1, model_sim, model_match, brand_sim, brand_m])
+        #features = np.array([j_similarity1, model_sim, model_match, brand_sim, brand_m])
+        features = np.array([j_similarity1,  model_match, price_diff, jw])
+
         X_data.append(combined_embedding)
         X_features.append(features)
         y_data.append(0) # Non-match

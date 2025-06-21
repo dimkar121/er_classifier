@@ -142,8 +142,10 @@ if __name__ == '__main__':
     num_candidates = 5
     d = 384
     phi = 0.1520531820505105065205350
-    df11 = pd.read_parquet(f"./data/Abt_embedded_mini_ft.pqt")
-    df22 = pd.read_parquet(f"./data/Buy_embedded_mini_ft.pqt")
+    #df11 = pd.read_parquet(f"./data/Abt_embedded_mini_ft.pqt")
+    #df22 = pd.read_parquet(f"./data/Buy_embedded_mini_ft.pqt")
+    df11 = pd.read_parquet(f"./data/Abt_embedded_mini.pqt")
+    df22 = pd.read_parquet(f"./data/Buy_embedded_mini.pqt")
     vectors_buy = df22['v'].tolist()
     buy_embeddings = np.array(vectors_buy).astype(np.float32)
     vectors_abt = df11['v'].tolist()
@@ -251,7 +253,7 @@ if __name__ == '__main__':
             price_diff = calculate_price_diff(price1, price2)
             m = are_models_matching(model1, model2)
 
-            features_list.append([j_similarity1, j_similarity2, m, price_diff, jw])
+            features_list.append([j_similarity1,m, price_diff, jw])
         features_array = np.array(features_list, dtype='float32')
         #features_2d = features_array.reshape(-1, 1)
 

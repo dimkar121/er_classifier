@@ -87,10 +87,26 @@ def calculate_brand_similarity(brand1, brand2):
 
     return jellyfish.jaro_winkler_similarity(str1, str2)
 
+def calculate_price_diff(price1, price2):
+    """Calculates the normalized difference between two prices."""
+    # Handle cases where price might be missing (None, NaN) or zero
+    try:
+        p1 = float(price1)
+        p2 = float(price2)
+    except (ValueError, TypeError):
+        return 0  # Return 0 if prices are not valid numbers
+
+    if max(p1, p2) == 0:
+        return 0
+
+    return abs(p1 - p2) / max(p1, p2)
 
 if __name__ == '__main__':
-    df22 = pd.read_parquet(f"./data/walmart_products_tuned.pqt") #df11
-    df11 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")   #df22
+    #df22 = pd.read_parquet(f"./data/walmart_products_tuned.pqt")
+    #df11 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")
+    df22 = pd.read_parquet(f"./data/walmart_products.pqt")
+    df11 = pd.read_parquet(f"./data/amazon_products.pqt")
+
     df11['id'] = pd.to_numeric(df11['id'], errors='coerce')
     df11.dropna(subset=['id'], inplace=True)
     df11['id'] = df11['id'].astype(int)
@@ -124,7 +140,8 @@ if __name__ == '__main__':
 
     from tensorflow import keras  # Or `import keras` depending on your setup
 
-    loaded_model_path = './data/er_walmart_amazon.keras'
+    #loaded_model_path = './data/er_walmart_amazon.keras'
+    loaded_model_path = './data/er_abt_buy.keras'
     # Load the model
     loaded_model = keras.models.load_model(loaded_model_path)
 
@@ -133,7 +150,7 @@ if __name__ == '__main__':
     batch_size = 10_000
     num_candidates = 5
     d = 384
-    phi = 0.140
+    phi = 0.120
 
     minhash_titles1 = {row['id']: row['title_v'] for index, row in df11.iterrows()}
     minhash_titles2 = {row['id']: row['title_v'] for index, row in df22.iterrows()}
@@ -147,6 +164,8 @@ if __name__ == '__main__':
     brands2 = {row['id']: row['brand'] for index, row in df22.iterrows()}
     models1 = {row['id']: row['modelno'] for index, row in df11.iterrows()}
     models2 = {row['id']: row['modelno'] for index, row in df22.iterrows()}
+    prices1 = {row['id']: row['price'] for index, row in df11.iterrows()}
+    prices2 = {row['id']: row['price'] for index, row in df22.iterrows()}
 
     vectors_amazon = df11['v'].tolist()   #df11
     amazon_embeddings = np.array(vectors_amazon).astype(np.float32)
@@ -193,6 +212,8 @@ if __name__ == '__main__':
             j_similarity2 = 1 - j_distance2
             title1 = titles1[amazonId_]
             title2 = titles2[walmartId_]
+            price1 = prices1[amazonId_]
+            price2 = prices2[walmartId_]
             jw = jellyfish.jaro_winkler_similarity(str(title1), str(title2))
             category1 = categories1[amazonId_]
             category2 = categories2[walmartId_]
@@ -208,8 +229,10 @@ if __name__ == '__main__':
             tokens = count_differing_tokens(title1, title2)
             brand_sim= calculate_brand_similarity(brand1, brand2)
             brand_m = brand_match(brand1, brand2)
+            price_diff = calculate_price_diff(price1, price2)
+            #features_list.append([ j_similarity1, model_sim, model_match, brand_sim, brand_m ])
+            features_list.append([ j_similarity1,  model_match, price_diff, jw])
 
-            features_list.append([ j_similarity1, model_sim, model_match, brand_sim, brand_m ])
         features_array = np.array(features_list, dtype='float32')
 
 

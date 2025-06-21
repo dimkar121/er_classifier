@@ -214,7 +214,7 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
         m = are_models_matching(model1, model2)
         # Ensure embeddings are numpy arrays and then concatenate
         combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-        features = np.array([j_similarity1, j_similarity2, m, price_diff, jw])
+        features = np.array([j_similarity1, m, price_diff, jw])
         X_data.append(combined_embedding)
         X_features.append(features)
         y_data.append(1) # Match
@@ -239,7 +239,7 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
                   price_diff = calculate_price_diff(price1, price2)
                   jw = jellyfish.jaro_winkler_similarity(str(name1), str(name2))
                   combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-                  features = np.array([j_similarity1, j_similarity2, m, price_diff, jw])
+                  features = np.array([j_similarity1, m, price_diff, jw])
                   X_data.append(combined_embedding)
                   X_features.append(features)
                   y_data.append(0)
@@ -290,7 +290,7 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
         j_similarity2 = 1 - j_distance2
 
         combined_embedding = np.concatenate((np.array(emb1), np.array(emb2) ))
-        features = np.array([j_similarity1, j_similarity2, m, price_diff, jw])
+        features = np.array([j_similarity1, m, price_diff, jw])
         X_data.append(combined_embedding)
         X_features.append(features)
         y_data.append(0) # Non-match

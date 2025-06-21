@@ -28,7 +28,7 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     df_cleaned = df1[mask_to_keep].copy()
     # Optional: Now that all rows are clean, you can safely cast the 'id' column to integer.
     df_cleaned['id'] = df_cleaned['id'].astype(int)
-    df_cleaned.to_parquet(f"./data/walmart_products.pqt")
+    df_cleaned.to_parquet(f"./data/amazon_products.pqt")
     df1 = df_cleaned
 
     mask_to_keep = pd.to_numeric(df2['id'], errors='coerce').notna()
@@ -36,7 +36,7 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     df_cleaned = df2[mask_to_keep].copy()
     # Optional: Now that all rows are clean, you can safely cast the 'id' column to integer.
     df_cleaned['id'] = df_cleaned['id'].astype(int)
-    df_cleaned.to_parquet(f"./data/amazon_products.pqt")
+    df_cleaned.to_parquet(f"./data/walmart_products.pqt")
     df2 = df_cleaned
 
     '''

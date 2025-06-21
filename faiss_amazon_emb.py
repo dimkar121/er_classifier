@@ -139,8 +139,11 @@ if __name__ == '__main__':
     num_candidates = 5
     d = 384
     phi = 0.325  #0.43
-    df1 = pd.read_parquet(f"./data/Amazon_embedded_mini_ft.pqt")
-    df2 = pd.read_parquet(f"./data/Google_embedded_mini_ft.pqt")
+    #df1 = pd.read_parquet(f"./data/Amazon_embedded_mini_ft.pqt")
+    #df2 = pd.read_parquet(f"./data/Google_embedded_mini_ft.pqt")
+    df1 = pd.read_parquet(f"./data/Amazon_embedded_mini.pqt")
+    df2 = pd.read_parquet(f"./data/Google_embedded_mini.pqt")
+
     vectors_google = df2['v'].tolist()
     google_embeddings = np.array(vectors_google).astype(np.float32)
     vectors_amazon = df1['v'].tolist()
@@ -153,11 +156,15 @@ if __name__ == '__main__':
     minhash_names2 = {row['id']: row['namev'] for index, row in df2_minhash.iterrows()}
     minhash_descrs1 = {row['id']: row['descriptionv'] for index, row in df1_minhash.iterrows()}
     minhash_descrs2 = {row['id']: row['descriptionv'] for index, row in df2_minhash.iterrows()}
-    df1['models'] = df1['title'].apply(extract_model)
+    #df1['models'] = df1['title'].apply(extract_model)
+    df1['models'] = df1['name'].apply(extract_model)
+
     df2['models'] = df2['name'].apply(extract_model)
     models1 = {row['id']: row['models'] for index, row in df1.iterrows()}
     models2 = {row['id']: row['models'] for index, row in df2.iterrows()}
-    names1 = {row['id']: row['title'] for index, row in df1.iterrows()}
+    #names1 = {row['id']: row['title'] for index, row in df1.iterrows()}
+    names1 = {row['id']: row['name'] for index, row in df1.iterrows()}
+
     names2 = {row['id']: row['name'] for index, row in df2.iterrows()}
     prices1 = {row['id']: row['price'] for index, row in df1.iterrows()}
     prices2 = {row['id']: row['price'] for index, row in df2.iterrows()}
@@ -229,7 +236,7 @@ if __name__ == '__main__':
             price_diff = calculate_price_diff(price1, price2)
             m = are_models_matching(model1, model2)
 
-            features_list.append([j_similarity1, j_similarity2, m, price_diff, jw])
+            features_list.append([j_similarity1,  m, price_diff, jw])
         features_array = np.array(features_list, dtype='float32')
 
         # Now, combine the two embedding arrays side-by-side.
