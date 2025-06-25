@@ -128,7 +128,10 @@ if __name__ == '__main__':
 
     from tensorflow import keras  # Or `import keras` depending on your setup
 
-    loaded_model_path = './data/er_abt_buy.keras'
+    #loaded_model_path = './data/er_abt_buy.keras'
+    loaded_model_path = './data/er_amazon_google.keras'
+    # use the er_abt model for both fine-tuned and non-fine-tuned embeddings
+    # use the er_amazon for both  fine-tuned and non-fine-tuned embeddings
     # Load the model
     loaded_model = keras.models.load_model(loaded_model_path)
     print("Model loaded successfully!")
@@ -137,33 +140,31 @@ if __name__ == '__main__':
     batch_size = 10_000
     model = "mini"
     num_candidates = 5
-    d = 384
-    phi = 0.325  #0.43
-    #df1 = pd.read_parquet(f"./data/Amazon_embedded_mini_ft.pqt")
-    #df2 = pd.read_parquet(f"./data/Google_embedded_mini_ft.pqt")
-    df1 = pd.read_parquet(f"./data/Amazon_embedded_mini.pqt")
-    df2 = pd.read_parquet(f"./data/Google_embedded_mini.pqt")
 
+    phi = 0.325  #0.43
+    #df1 = pd.read_parquet(f"./data/Amazon_mini.pqt")
+    #df2 = pd.read_parquet(f"./data/GoogleProducts_mini.pqt")
+    df1 = pd.read_parquet(f"./data/Amazon_mini_ft.pqt")
+    df2 = pd.read_parquet(f"./data/GoogleProducts_mini_ft.pqt")
     vectors_google = df2['v'].tolist()
     google_embeddings = np.array(vectors_google).astype(np.float32)
+    d = google_embeddings.shape[1]
     vectors_amazon = df1['v'].tolist()
     amazon_embeddings = np.array(vectors_amazon).astype(np.float32)
     amazon_ids = np.array(df1['id'].tolist())
     google_ids = df2['id'].tolist()
-    df1_minhash = pd.read_parquet(f"./data/Amazon_embedded_minhash_all.pqt")
-    df2_minhash = pd.read_parquet(f"./data/Google_embedded_minhash_all.pqt")
-    minhash_names1 = {row['id']: row['namev'] for index, row in df1_minhash.iterrows()}
-    minhash_names2 = {row['id']: row['namev'] for index, row in df2_minhash.iterrows()}
-    minhash_descrs1 = {row['id']: row['descriptionv'] for index, row in df1_minhash.iterrows()}
-    minhash_descrs2 = {row['id']: row['descriptionv'] for index, row in df2_minhash.iterrows()}
+    minhash_names1 = {row['id']: row['title_v'] for index, row in df1.iterrows()}
+    minhash_names2 = {row['id']: row['name_v'] for index, row in df2.iterrows()}
+    minhash_descrs1 = {row['id']: row['description_v'] for index, row in df1.iterrows()}
+    minhash_descrs2 = {row['id']: row['description_v'] for index, row in df2.iterrows()}
     #df1['models'] = df1['title'].apply(extract_model)
-    df1['models'] = df1['name'].apply(extract_model)
+    df1['models'] = df1['title'].apply(extract_model)
 
     df2['models'] = df2['name'].apply(extract_model)
     models1 = {row['id']: row['models'] for index, row in df1.iterrows()}
     models2 = {row['id']: row['models'] for index, row in df2.iterrows()}
     #names1 = {row['id']: row['title'] for index, row in df1.iterrows()}
-    names1 = {row['id']: row['name'] for index, row in df1.iterrows()}
+    names1 = {row['id']: row['title'] for index, row in df1.iterrows()}
 
     names2 = {row['id']: row['name'] for index, row in df2.iterrows()}
     prices1 = {row['id']: row['price'] for index, row in df1.iterrows()}
@@ -173,7 +174,7 @@ if __name__ == '__main__':
     # df1_minhash['brand'] = df1_minhash['name'].apply(lambda text: find_brand_in_text(text, brands_list))
     brands1 = {row['id']: row['manufacturer'] for index, row in df1.iterrows()}
     #brands2 = {row['id']: row['manufacturer'] for index, row in df2.iterrows()}
-    df2['brand'] = df2_minhash['name'].apply(lambda text: find_brand_in_text(text, brands_list))
+    df2['brand'] = df2['name'].apply(lambda text: find_brand_in_text(text, brands_list))
     brands2 = {row['id']: row['brand'] for index, row in df2.iterrows()}
 
     index = faiss.IndexHNSWFlat(d, 32)
@@ -243,8 +244,8 @@ if __name__ == '__main__':
         # This creates the final "mega-batch" for your neural network.
         combined_embeddings = np.concatenate([candidate_amazon_embeddings, repeated_google_embeddings], axis=1)
 
-        emb1_batch = combined_embeddings[:, :384]
-        emb2_batch = combined_embeddings[:, 384:]
+        emb1_batch = combined_embeddings[:, :d]
+        emb2_batch = combined_embeddings[:, d:]
         numerator = np.einsum('ij,ij->i', emb1_batch, emb2_batch)
         denominator = np.linalg.norm(emb1_batch, axis=1) * np.linalg.norm(emb2_batch, axis=1)
         epsilon = 1e-7

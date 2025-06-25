@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 import time
 if __name__ == '__main__':
 
-    df1 = pd.read_parquet(f"./data/Amazon_embedded_mini.pqt")
-    df2 = pd.read_parquet(f"./data/Google_embedded_mini.pqt")
+    df1 = pd.read_parquet(f"./data/Amazon_mini.pqt")
+    df2 = pd.read_parquet(f"./data/GoogleProducts_mini.pqt")
     gold_standard = pd.read_csv(f"./data/truth_Amazon_googleProducts.csv", sep=",", encoding="utf-8", keep_default_na=False)
 
     amazon_embeddings = df1['v'].tolist()
@@ -89,8 +89,13 @@ if __name__ == '__main__':
     print("\n--- 3. Creating InputExample objects for training ---")
     train_examples = []
     # Create mapping dictionaries for fast text lookup
-    amazon_id_to_text = pd.Series(df1.name.values, index=df1.id).to_dict()
-    google_id_to_text = pd.Series(df2.name.values, index=df2.id).to_dict()
+
+    df1['combined_text'] = df1[["title","description","manufacturer"]].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    df2['combined_text'] = df2[["name","description","manufacturer"]].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    #amazon_id_to_text = pd.Series(df1.title.values, index=df1.id).to_dict()
+    #google_id_to_text = pd.Series(df2.name.values, index=df2.id).to_dict()
+    amazon_id_to_text = pd.Series(df1.combined_text.values, index=df1.id).to_dict()
+    google_id_to_text = pd.Series(df2.combined_text.values, index=df2.id).to_dict()
 
     for triplet in training_triplets_ids:
         anchor_text =   google_id_to_text.get(triplet['google_id'])

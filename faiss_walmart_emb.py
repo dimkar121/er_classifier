@@ -102,10 +102,10 @@ def calculate_price_diff(price1, price2):
     return abs(p1 - p2) / max(p1, p2)
 
 if __name__ == '__main__':
-    #df22 = pd.read_parquet(f"./data/walmart_products_tuned.pqt")
-    #df11 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")
-    df22 = pd.read_parquet(f"./data/walmart_products.pqt")
-    df11 = pd.read_parquet(f"./data/amazon_products.pqt")
+    df22 = pd.read_parquet(f"./data/walmart_products_tuned.pqt")
+    df11 = pd.read_parquet(f"./data/amazon_products_tuned.pqt")
+    #df22 = pd.read_parquet(f"./data/walmart_products.pqt")
+    #df11 = pd.read_parquet(f"./data/amazon_products.pqt")
 
     df11['id'] = pd.to_numeric(df11['id'], errors='coerce')
     df11.dropna(subset=['id'], inplace=True)
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     batch_size = 10_000
     num_candidates = 5
     d = 384
-    phi = 0.120
+    phi = 0.80
 
     minhash_titles1 = {row['id']: row['title_v'] for index, row in df11.iterrows()}
     minhash_titles2 = {row['id']: row['title_v'] for index, row in df22.iterrows()}

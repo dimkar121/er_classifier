@@ -5,6 +5,12 @@ import time
 from scipy.spatial.distance import jaccard
 import re
 import jellyfish
+import torch
+from transformers import pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import json
+import re
+
 
 def extract_model(text):
     """
@@ -106,7 +112,90 @@ def check_brand_match(abt_brand, buy_brand):
 
 
 
+
+# --- 2. Define the Prompt Creation Function ---
+# This function formats your product data into a prompt that Phi-3 understands well.
+def create_phi3_prompt(title1, description1, product2, description2):
+    """
+    Creates a structured prompt for the Phi-3 model, instructing it to
+    perform entity resolution and return a JSON object.
+
+    Args:
+        product_a (pd.Series): A row from a DataFrame for the first product.
+        product_b (pd.Series): A row from a DataFrame for the second product.
+
+    Returns:
+        str: A fully formatted prompt ready for the model.
+    """
+    # The <|user|> and <|assistant|> tokens are special markers for Phi-3's chat template.
+    prompt = f"""<|user|>
+You are an expert entity resolution system. Analyze the two product descriptions provided below. Determine if they refer to the exact same real-world item. Your response must be a valid JSON object only, with no other text or explanation.
+
+The JSON object must have the following structure:
+{{
+  "is_match": boolean,
+  "confidence": "High" | "Medium" | "Low",
+  "reasoning": "A brief explanation of your decision, focusing on key attributes like model number and brand."
+}}
+
+**Product A:**
+- title: {title1}
+- description: {description1}
+
+**Product B:**
+- title: {title2}
+- description: {description2}
+<|end|>
+<|assistant|>
+"""
+    return prompt
+
+
+def parse_llm_response(response_text):
+    """
+    Extracts and parses a JSON object from the LLM's raw output string.
+    This handles cases where the model might add extra text or markdown.
+    """
+    # Use regex to find the JSON block, even if it's wrapped in text or markdown
+    match = re.search(r'\{.*\}', response_text, re.DOTALL)
+    if not match:
+        print("Warning: Could not find a JSON object in the response.")
+        return None
+
+    json_string = match.group(0)
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError:
+        print("Warning: Failed to decode the extracted JSON string.")
+        return None
+
+
 if __name__ == '__main__':
+    print("--- 1. Loading microsoft/Phi-3-mini-4k-instruct model ---")
+
+    model_id = "microsoft/Phi-3-mini-4k-instruct"
+    try:
+        # Set the device to GPU if available, otherwise CPU
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Using device: {device}")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            device_map=device,
+            #torch_dtype="auto",
+            torch_dtype=torch.float32,  # Using a more standard dtype instead of "auto"
+            trust_remote_code=True,
+            attn_implementation="eager"
+        )
+        model.to(device)
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        print("Model and tokenizer loaded successfully.")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        print(
+            "Please ensure you have an internet connection and the 'transformers' and 'torch' libraries are installed.")
+        exit()
+
+
     truth = pd.read_csv("./data/truth_abt_buy.csv", sep=",", encoding="unicode_escape", keep_default_na=False)
     truthD = dict()
     a = 0
@@ -126,20 +215,18 @@ if __name__ == '__main__':
 
     from tensorflow import keras  # Or `import keras` depending on your setup
 
-    loaded_model_path = './data/er_abt_buy.keras'
+    #loaded_model_path = './data/er_abt_buy.keras'
     # Load the model
-    loaded_model = keras.models.load_model(loaded_model_path)
+    #loaded_model = keras.models.load_model(loaded_model_path)
 
     #loaded_model = xgb.XGBClassifier()
     #loaded_model.load_model("./data/abt_buy_xgb_model.json")
-
-
-    print("Model loaded successfully!")
+    #print("Model loaded successfully!")
     # You can verify the model architecture
     #loaded_model.summary()
     batch_size = 10_000
-    model = "mini"
-    num_candidates = 5
+    #model = "mini"
+    num_candidates = 2
     d = 384
     phi = 0.1520531820505105065205350
     df11 = pd.read_parquet(f"./data/Abt_embedded_mini_ft.pqt")
@@ -155,6 +242,16 @@ if __name__ == '__main__':
 
     df1_minhash = pd.read_parquet(f"./data/Abt_embedded_minhash_all.pqt")
     df2_minhash = pd.read_parquet(f"./data/Buy_embedded_minhash_all.pqt")
+    vectors_abt_minhash = np.array(df1_minhash['namev'].tolist())
+    vectors_buy_minhash = np.array(df2_minhash['namev'].tolist())
+
+    #hybrid_vectors1 = np.concatenate((abt_embeddings, vectors_abt_minhash ), axis=1)
+    #hybrid_vectors2 = np.concatenate((buy_embeddings, vectors_buy_minhash), axis=1)
+
+    #hybrid_vectors1 = hybrid_vectors1.astype('float32')
+    #hybrid_vectors2 = hybrid_vectors2.astype('float32')
+
+    #print("Shape of the final concatenated array:", hybrid_vectors1.shape)
 
 
     minhash_names1 = {row['id']: row['namev'] for index, row in df1_minhash.iterrows()}
@@ -175,130 +272,64 @@ if __name__ == '__main__':
     brands1 = {row['id']: row['brand'] for index, row in df1_minhash.iterrows()}
     brands2 = {row['id']: row['brand'] for index, row in df2_minhash.iterrows()}
 
+    d = abt_embeddings.shape[1]
     index = faiss.IndexHNSWFlat(d, 32, faiss.METRIC_L2)
     index.hnsw.efConstruction = 60
     index.hnsw.efSearch = 16
     index.add(abt_embeddings)
 
-
-     # thr.opt_inner_threshold(df22, df11, truth)
-
-
     tp = 0
     fp = 0
     start_time = time.time()
-    tp_ = 0
-    fp_=0
+
     df_abt_indexed = df11.set_index('id')
     df_buy_indexed = df22.set_index('id')
     for i in range(0, len(vectors_buy), batch_size):
 
-        buys = buy_embeddings[i: i + batch_size]
+        buys = np.array(vectors_buy[i: i + batch_size]).astype(np.float32)
         buy_ids_in_batch = buy_ids[i: i + batch_size]
         distances, candidate_indices = index.search(buys, num_candidates)  # return scholars
-
-        '''
-        repeated_buy_ids = np.repeat(buy_ids_in_batch, num_candidates)
         flat_candidate_ids = candidate_indices.flatten()
-        abt_ids_in_batch = abt_ids[flat_candidate_ids]
-        for abtId, buyId in zip(abt_ids_in_batch, repeated_buy_ids):
-          tpFound = False
-          if abtId in truthD.keys():
-            idBuys = truthD[abtId]
-            for idBuy in idBuys:
-                if idBuy == buyId:
-                    tp += 1
-                    tpFound = True
-                else:
-                   fp += 1
-
-        continue
-        '''
-
-        #print("candidates returned shape:", candidate_ids_batch.shape)
-
-        # First, flatten the 2D array of IDs into a single long 1D array.
-        # Shape changes from (1024, 5) to (5120,)
-        flat_candidate_ids = candidate_indices.flatten()
-
-
-        # Now, use this flat list of indices to grab all the corresponding DBLP
-        # embeddings in a single, efficient operation.
         candidate_abt_embeddings = abt_embeddings[flat_candidate_ids]
-        # We need to match each scholar embedding with its top-k candidates.
-        # The np.repeat() function is perfect for this. It repeats each row of
-        # scholar_batch k times.
         repeated_buy_embeddings = np.repeat(buys, num_candidates, axis=0)
         repeated_buy_ids = np.repeat(buy_ids_in_batch, num_candidates)
-
-
-        features_list = []
         abt_ids_in_batch = abt_ids[flat_candidate_ids]
-        for abtId_, buyId_ in zip(abt_ids_in_batch, repeated_buy_ids):
-            minhash_name1 = minhash_names1[abtId_]
-            minhash_name2 = minhash_names2[buyId_]
-            minhash_descr1 = minhash_descrs1[abtId_]
-            minhash_descr2 = minhash_descrs2[buyId_]
-            j_distance1 = jaccard(minhash_name1, minhash_name2)
-            j_distance2 = jaccard(minhash_descr1, minhash_descr2)
-            j_similarity1 = 1 - j_distance1
-            j_similarity2 = 1 - j_distance2
-
-            model1 = models1[abtId_]
-            model2 = models2[buyId_]
-            name1 = names1[abtId_]
-            name2 = names2[buyId_]
-            price1 = prices1[abtId_]
-            price2 = prices2[buyId_]
-            brand1 = brands1[abtId_]
-            brand2 = brands2[buyId_]
-            br = check_brand_match(brand1, brand2)
-            jw = jellyfish.jaro_winkler_similarity(str(name1), str(name2))
-            price_diff = calculate_price_diff(price1, price2)
-            m = are_models_matching(model1, model2)
-
-            features_list.append([j_similarity1,m, price_diff, jw])
-        features_array = np.array(features_list, dtype='float32')
-        #features_2d = features_array.reshape(-1, 1)
-
-
-        # Now, combine the two embedding arrays side-by-side.
-        # This creates the final "mega-batch" for your neural network.
-        combined_embeddings = np.concatenate([candidate_abt_embeddings, repeated_buy_embeddings], axis=1)
-
-        emb1_batch = combined_embeddings[:, :384]
-        emb2_batch = combined_embeddings[:, 384:]
-        numerator = np.einsum('ij,ij->i', emb1_batch, emb2_batch)
-        denominator = np.linalg.norm(emb1_batch, axis=1) * np.linalg.norm(emb2_batch, axis=1)
-        epsilon = 1e-7
-        cosine_sim_scores = (numerator / (denominator + epsilon)).reshape(-1, 1)
-        features_array = np.concatenate([features_array, cosine_sim_scores], axis=1)
-
-        diff_vectors = emb1_batch - emb2_batch
-        product_vectors = emb1_batch * emb2_batch
-        interactions = np.concatenate([diff_vectors, product_vectors], axis=1)
-
-        #combined_embeddings = features_array
-        #print(combined_embeddings.shape)
-
-        predictions = loaded_model.predict( [combined_embeddings, interactions, features_array], verbose=0)
-
-        #predictions = loaded_model.predict_proba(combined_embeddings)
-
-
-        #print(f"Predictions shape {predictions.flatten().shape}  candidates  shape {candidate_indices.flatten().shape} {repeated_scholar_ids.shape} ")
-        predicted_statuses = (predictions > phi).astype(int).flatten()
-
-        for predicted_status, abt_ind, buyId in zip(predicted_statuses, candidate_indices.flatten(), repeated_buy_ids):
-
+        for abt_ind, buyId in zip(candidate_indices.flatten(), repeated_buy_ids):
           abtId = abt_ids[abt_ind]
           title1 = df_abt_indexed.loc[abtId, 'name']
           description1 = df_abt_indexed.loc[abtId, 'description']
           title2 = df_buy_indexed.loc[buyId, 'name']
           description2 = df_buy_indexed.loc[buyId, 'description']
 
-          if predicted_status == 1:
-            abtId = abt_ids[abt_ind]
+          # Create the prompt
+          prompt = create_phi3_prompt(title1, description1, title2, description2)
+
+          print("\n--- 4. Sending prompt to the model ---")
+
+          inputs = tokenizer(prompt, return_tensors="pt").to(device)
+          outputs = model.generate(**inputs, max_new_tokens=100, use_cache=False)
+
+
+          # Decode the output tokens back to text
+          # The [0] accesses the first (and only) sequence in the batch
+          generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+          print("\n--- 5. Received raw response from model ---")
+          print(generated_text)
+
+          # Extract just the assistant's part of the response
+          assistant_response = generated_text.split("<|assistant|>")[-1]
+
+          # Parse the response to get the structured JSON
+          result = parse_llm_response(assistant_response)
+
+          print("\n--- 6. Final Parsed Result ---")
+          if result:
+              # Use json.dumps for pretty printing the dictionary
+              print(json.dumps(result, indent=2))
+          else:
+              print("Could not get a valid result from the model.")
+
+          if result["is_match"]:
             tpFound = False
             if abtId in truthD.keys():
                 idBuys = truthD[abtId]

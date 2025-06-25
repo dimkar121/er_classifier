@@ -171,12 +171,12 @@ def fine_tune(text_columns_walmart, text_columns_amazon):
     print("\n--- 3. Creating InputExample objects for training ---")
     train_examples = []
 
-    #df1['combined_text'] = df1[text_columns_walmart].fillna('').apply(lambda row: ' '.join(row), axis=1)
-    #df2['combined_text'] = df2[text_columns_amazon].fillna('').apply(lambda row: ' '.join(row), axis=1)
-    #df1['combined_text'] = df1['combined_text'].str.lower()
-    #df2['combined_text'] = df2['combined_text'].str.lower()
-    a_id_to_text = pd.Series(df1.title.values, index=df1.id).to_dict()
-    b_id_to_text = pd.Series(df2.title.values, index=df2.id).to_dict()
+    df1['combined_text'] = df1[text_columns_walmart].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    df2['combined_text'] = df2[text_columns_amazon].fillna('').apply(lambda row: ' '.join(row), axis=1)
+    a_id_to_text = pd.Series(df1.combined_text.values, index=df1.id).to_dict()
+    b_id_to_text = pd.Series(df2.combined_text.values, index=df2.id).to_dict()
+    #a_id_to_text = pd.Series(df1.title.values, index=df1.id).to_dict()
+    #b_id_to_text = pd.Series(df2.title.values, index=df2.id).to_dict()
 
     sentences1 = []
     sentences2 = []

@@ -172,13 +172,16 @@ def check_brand_match(abt_brand, buy_brand):
 
 embedding_dim = 384 # Or df1['v'][0].shape[0] if 'v' contains numpy arrays
 for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2dfs):
-  df1 = pd.read_parquet(f"./data/Amazon_embedded_mini_ft.pqt")
-  df2 = pd.read_parquet(f"./data/Google_embedded_mini_ft.pqt")
+  #df1 = pd.read_parquet(f"./data/Amazon_embedded_mini_ft.pqt")
+  #df2 = pd.read_parquet(f"./data/Google_embedded_mini_ft.pqt")
+  df1 = pd.read_parquet(f"./data/Amazon_mini_ft.pqt")
+  df2 = pd.read_parquet(f"./data/GoogleProducts_mini_ft.pqt")
+
   gold_standard = pd.read_csv(f"./data/truth_{file3}.csv", sep=",", encoding="utf-8", keep_default_na=False)
 
 
-  df1_minhash = pd.read_parquet(f"./data/Amazon_embedded_minhash_all.pqt")
-  df2_minhash = pd.read_parquet(f"./data/Google_embedded_minhash_all.pqt")
+  #df1_minhash = pd.read_parquet(f"./data/Amazon_embedded_minhash_all.pqt")
+  #df2_minhash = pd.read_parquet(f"./data/Google_embedded_minhash_all.pqt")
 
   #df1_minhash["namev"] = df1_minhash.apply(lambda row: minhash(row["title"]), axis=1)
   #df2_minhash["namev"] = df2_minhash.apply(lambda row: minhash(row["name"]), axis=1)
@@ -188,10 +191,10 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
   #df2_minhash.to_parquet('./data/Google_embedded_minhash_all.pqt', engine='pyarrow')
   #exit()
 
-  minhash_names1 = {row['id']: row['namev'] for index, row in df1_minhash.iterrows()}
-  minhash_names2 = {row['id']: row['namev'] for index, row in df2_minhash.iterrows()}
-  minhash_descrs1 = {row['id']: row['descriptionv'] for index, row in df1_minhash.iterrows()}
-  minhash_descrs2 = {row['id']: row['descriptionv'] for index, row in df2_minhash.iterrows()}
+  minhash_names1 = {row['id']: row['title_v'] for index, row in df1.iterrows()}
+  minhash_names2 = {row['id']: row['name_v'] for index, row in df2.iterrows()}
+  minhash_descrs1 = {row['id']: row['description_v'] for index, row in df1.iterrows()}
+  minhash_descrs2 = {row['id']: row['description_v'] for index, row in df2.iterrows()}
   df1['models'] = df1['title'].apply(extract_model)
   df2['models'] = df2['name'].apply(extract_model)
 
@@ -205,7 +208,7 @@ for file1, file2, file3, id1df, id2df in zip(files1, files2, files3, id1dfs, id2
   brands_list = sorted([str(b).lower() for b in all_brands if len(str(b)) > 2], key=len, reverse=True)
   #df1_minhash['brand'] = df1_minhash['name'].apply(lambda text: find_brand_in_text(text, brands_list))
   brands1 = {row['id']: row['manufacturer'] for index, row in df1.iterrows()}
-  df2['brand'] = df2_minhash['name'].apply(lambda text: find_brand_in_text(text, brands_list))
+  df2['brand'] = df2['name'].apply(lambda text: find_brand_in_text(text, brands_list))
   brands2 = {row['id']: row['brand'] for index, row in df2.iterrows()}
 
   vectors1 = df1['v'].tolist()
@@ -376,8 +379,31 @@ product_vectors = emb1_batch * emb2_batch
 X_interactions = np.concatenate([diff_vectors, product_vectors], axis=1)
 
 
-X_embeddings_train, X_embeddings_val, X_interactions_train, X_interactions_val,  X_features_train, X_features_val, y_train,  y_val = train_test_split(
-    X_data, X_interactions, X_features, y, test_size=0.20, random_state=42, stratify=y)
+#X_embeddings_train, X_embeddings_val, X_interactions_train, X_interactions_val,  X_features_train, X_features_val, y_train,  y_val = train_test_split(
+#    X_data, X_interactions, X_features, y, test_size=0.20, random_state=42, stratify=y)
+
+X_embeddings_train, X_embeddings_temp, \
+X_interactions_train, X_interactions_temp, \
+X_features_train, X_features_temp, \
+y_train, y_temp = train_test_split(
+    X_data, X_interactions, X_features, y,
+    test_size=0.40, # Hold out 40% for val and test
+    random_state=42,
+    stratify=y
+)
+
+# --- Second split: Split the temporary set (40%) into validation (20%) and test (20%) ---
+# We set test_size=0.5 to split the temp set (which is 40% of the total) in half.
+# 50% of 40% is 20%.
+X_embeddings_val, X_embeddings_test, \
+X_interactions_val, X_interactions_test, \
+X_features_val, X_features_test, \
+y_val, y_test = train_test_split(
+    X_embeddings_temp, X_interactions_temp, X_features_temp, y_temp,
+    test_size=0.50, # Split the 40% into two 20% chunks
+    random_state=42,
+    stratify=y_temp # Stratify on the temporary labels
+)
 
 
 # Scale the engineered features (still a best practice)
@@ -410,8 +436,8 @@ x3 = Dense(32, activation='relu')(x3)
 # The output of this branch is the 'x2' tensor
 
 # --- Combine the branches ---
-#combined = Concatenate()([x1, x2, x3])
-combined = Concatenate()([x1, x2])
+combined = Concatenate()([x1, x2, x3])
+#combined = Concatenate()([x1, x2])
 # --- Add a final classifier head ---
 
 final_dense = Dense(128, activation='relu')(combined)
@@ -430,9 +456,9 @@ model.compile(optimizer='adam',
 model.summary()
 
 # --- 4. TRAIN THE MODEL ---
-
 train_inputs = [X_embeddings_train, X_interactions_train, X_features_train]
 val_inputs = [X_embeddings_val, X_interactions_val, X_features_val]
+test_inputs = [X_embeddings_test, X_interactions_test, X_features_test]
 
 
 # We will monitor validation loss. Training will stop if it doesn't improve for 10 epochs.
@@ -468,10 +494,24 @@ precision = precision_score(y_val, y_pred)
 recall = recall_score(y_val, y_pred)
 f1 = f1_score(y_val, y_pred)
 
-print("\n--- Two-Branch Neural Network Results ---")
+print("\n--- Three-Branch Neural Network Results ---")
 print(f"Precision: {precision:.4f}")
 print(f"Recall: {recall:.4f}")
 print(f"F1-Score: {f1:.4f}")
+
+print("\nEvaluating on test data...")
+# The .predict() method also takes a list of inputs
+y_pred_probs = model.predict(test_inputs)
+y_pred = (y_pred_probs > 0.5).astype(int)
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+
+print("\n--- Three-Branch Neural Network Results ---")
+print(f"Precision: {precision:.4f}")
+print(f"Recall: {recall:.4f}")
+print(f"F1-Score: {f1:.4f}")
+
 
 
 model_save_path = f"./data/er_{name}.keras"
