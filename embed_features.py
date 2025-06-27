@@ -136,23 +136,23 @@ def process_and_embed_table(input_filename, output_filename, model):
 
     # Combine relevant text columns for dense embedding
     print("Creating combined text for dense embeddings...")
-    df["title"] = df["title"].str.lower()
-    df["brand"] = df["brand"].str.lower()
-    df["description"] = df["description"].str.lower()
+    ##df["title"] = df["title"].str.lower()
+    #df["brand"] = df["brand"].str.lower()
+    #df["description"] = df["description"].str.lower()
 
     #columns_to_serialize = ['brand', 'title', 'description']
-    columns_to_serialize = ['title']
+    columns_to_serialize = ['title','description']
 
     # --- 3. Apply the serialization function to create the new column ---
     # We use .apply() with a lambda function to pass the list of columns
     # to our main serialization function for each row.
-    df['combined_text'] = df.apply(
-        lambda row: serialize_row(row, columns_to_serialize),
-        axis=1
-    )
-    df["description"] = summarize_description(df["description"].str.lower())  # df["description"].str.lower()
+    #df['combined_text'] = df.apply(
+    ##    lambda row: serialize_row(row, columns_to_serialize),
+    #    axis=1
+    #)
+    #df["description"] = summarize_description(df["description"].str.lower())  # df["description"].str.lower()
 
-    #df['combined_text'] =  df['title'] + ' ' + df['description']
+    df['combined_text'] =  df['title'] + ' ' + df['description']
 
     # --- Step 2: Generate Dense Embeddings (MiniLM) ---
     print("Generating dense embeddings... (This may take a while)")
@@ -163,11 +163,11 @@ def process_and_embed_table(input_filename, output_filename, model):
     df['v'] = [emb.tolist() for emb in embeddings]
 
     # --- Step 3: Generate MinHash Vectors ---
-    print("Generating MinHash vectors for title (mv1)...")
-    df['mv1'] = df['title'].apply(get_minhash_vector)
+    #print("Generating MinHash vectors for title (mv1)...")
+    #df['mv1'] = df['title'].apply(get_minhash_vector)
 
-    print("Generating MinHash vectors for description (mv2)...")
-    df['mv2'] = df['description'].apply(get_minhash_vector)
+    #print("Generating MinHash vectors for description (mv2)...")
+    #df['mv2'] = df['description'].apply(get_minhash_vector)
 
     # --- Step 4: Finalize and Save ---
     # Drop the temporary combined_text column

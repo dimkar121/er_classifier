@@ -388,7 +388,20 @@ if __name__ == '__main__':
     #model_name = "roberta-base-nli-stsb-mean-tokens"
 
     #extract_unique_brands()
-    #exit()
+    folder = "./data/wdc/large"
+    embedding_model = SentenceTransformer(model_name)
+    #embed_features.process_and_embed_table(
+    #    input_filename=f'{folder}/tableA.csv',
+    #    output_filename=f'{folder}/tableA.pqt',
+    #    model=embedding_model
+    #)
+    embed_features.process_and_embed_table(
+        input_filename=f'{folder}/tableB.csv',
+        output_filename=f'{folder}/tableB.pqt',
+        model=embedding_model
+    )
+
+    exit()
     create_train_set_tables()
     embedding_model = SentenceTransformer(model_name)
     embed_features.process_and_embed_table(
