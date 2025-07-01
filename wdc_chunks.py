@@ -50,12 +50,17 @@ if __name__ == '__main__':
        print("Warning: No GPU found. FAISS will run on the CPU.")
        # Fallback to a CPU index if no GPU is found
        quantizer = faiss.IndexFlatL2(d)
-       cpu_index = faiss.IndexIVFPQ(quantizer, d, 1024, 8, 8)
+       nlist=1024
+       cpu_index = faiss.IndexIVFPQ(quantizer, d, nlist, 8, 8)
        search_index = cpu_index
 
     vectors_sample = sample_df['v'].tolist()
     vectors_sample_embeddings = np.array(vectors_sample).astype(np.float32)
     search_index.train(vectors_sample_embeddings)
+
+    print(f"Index trained with {search_index.nlist} clusters (inverted lists).")
+    print("-" * 50)
+
 
     search_index.nprobe = 30
     all_embeddings_list = []
@@ -75,6 +80,19 @@ if __name__ == '__main__':
        all_ids_list.extend(chunk_df['id'].tolist())
        id_to_title_dict.update(pd.Series(chunk_df.title.values, index=chunk_df.id).to_dict())
        print(f"Added {len(vectors_chunk)} vectors. Total vectors in index: {search_index.ntotal}")
+
+    invlists = faiss.extract_index_ivf(search_index).invlists
+    print(invlists)
+    # Now you can inspect the clusters
+    # For example, to see which vector IDs are in cluster #5:
+    cluster_id_to_check = 5
+    ids_in_cluster = faiss.rev_swig_ptr(invlists.get_ids(cluster_id_to_check), invlists.list_size(cluster_id_to_check))
+    print(f"Vector IDs in cluster {cluster_id_to_check}:")
+    print(ids_in_cluster)
+    exit()
+
+
+
     
     try:
         # Concatenate all embedding chunks into one large NumPy array

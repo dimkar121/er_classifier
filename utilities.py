@@ -24,3 +24,20 @@ def minhash(set_elements, num_hashes=120):
         signature[i] = 1 if (min_hash % 2) == 0 else 0
     return signature
 
+def check_if_match(row, gold_standard):
+    """
+    Checks if an ID pair from a row exists in the gold standard dictionary.
+    Returns 1 if it's a match, 0 otherwise.
+    """
+    id_a = row['id_A']
+    id_b = row['id_B']
+
+    # Get the list of known matches for id_a, or an empty list if id_a is not in the gold standard
+    matching_ids_for_a = gold_standard.get(id_a, [])
+    if id_a not in gold_standard:
+        return np.nan
+    # Check if id_b is in that list of matches
+    if id_b in matching_ids_for_a:
+        return 1
+    else:
+        return 0
