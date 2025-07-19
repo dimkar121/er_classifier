@@ -96,7 +96,10 @@ def run(df11, df22, truth, model_name, phi):
 
 
     end_time = time.time()
-    print(f"recall={round(tp / matches, 2)} precision={round(tp / (tp + fp), 2)} total matching time={end_time-start_time} seconds.")
+    recall = round(tp / matches, 2)
+    precision = round(tp / (tp + fp), 2)
+    return recall, precision
+
 
 if __name__ == '__main__':
     model="mini"
@@ -104,7 +107,5 @@ if __name__ == '__main__':
     truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
     df11 = pd.read_parquet(f"./data/fodors_{model}.pqt")
     df22 = pd.read_parquet(f"./data/zagats_{model}.pqt")
-    id1t = "idFodors"
-    id2t = "idZagats"
     run(df11, df22, truth, model, 0.2)
 

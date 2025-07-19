@@ -13,7 +13,7 @@ import faiss_acm_dblp as acm_dblp
 
 if __name__ == '__main__':
      datasets = [ "IMDB-DBPEDIA",   "AMAZON-WALMART",  "AMAZON-GOOGLE" ,"ABT-BUY", "FODORS-ZAGATS", "ACM-DBLP","SCHOLAR-DBLP", "VOTERS" ]  
-     datasets = [ "ACM-DBLP" ]
+     datasets = [ "AMAZON-WALMART" ]
      models = ["mini", "mpnet"]
      
      for dataset in datasets:
@@ -40,9 +40,10 @@ if __name__ == '__main__':
              ind = imdb_dbpedia
              phi = phis[i]
            elif dataset == "AMAZON-WALMART":
+             phis = [0.15, 0.21]
              truth = pd.read_csv("./data/truth_amazon_walmart.tsv", sep="\t", encoding="unicode_escape", keep_default_na=False)
-             df22 = pd.read_parquet(f"./data/walmart_products_{model}.pqt")
-             df11 = pd.read_parquet(f"./data/amazon_products_{model}.pqt")
+             df22 = pd.read_parquet(f"./data/walmart_products_{model}{suffix}.pqt")
+             df11 = pd.read_parquet(f"./data/amazon_products_{model}{suffix}.pqt")
              df11['id'] = pd.to_numeric(df11['id'], errors='coerce')
              df11.dropna(subset=['id'], inplace=True)
              df11['id'] = df11['id'].astype(int)
@@ -51,32 +52,30 @@ if __name__ == '__main__':
              df22['id'] = df22['id'].astype(int)
              df11.reset_index(drop=True, inplace=True)
              df22.reset_index(drop=True, inplace=True)
-             id1t = "id2"
-             id2t = "id1"
              ind = amazon_walmart
              phi = phis[i]
            elif dataset == "ACM-DBLP":
              phis = [0.35, 0.35]
              truth_file="./data/truth_ACM_DBLP.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
-             df22 = pd.read_parquet(f"./data/DBLP_{model}.pqt")
-             df11 = pd.read_parquet(f"./data/ACM_{model}.pqt")
+             df22 = pd.read_parquet(f"./data/DBLP_{model}{suffix}.pqt")
+             df11 = pd.read_parquet(f"./data/ACM_{model}{suffix}.pqt")
              ind = acm_dblp
              phi = phis[i]
            elif dataset == "FODORS-ZAGATS":
+             phis = [0.2, 0.2]
              truth_file="./data/truth_fodors_zagats.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
-             df22 = pd.read_parquet(f"./data/fodors_{model}.pqt")
-             df11 = pd.read_parquet(f"./data/zagats_{model}.pqt")
-             id1t = "idFodors"
-             id2t = "idZagats"
+             df11 = pd.read_parquet(f"./data/fodors_{model}{suffix}.pqt")
+             df22 = pd.read_parquet(f"./data/zagats_{model}{suffix}.pqt")
+             ind = fodors_zagats
+             phi = phis[i]
            elif dataset == "ABT-BUY":    
+             phis = [0.15, 0.25]
              truth_file="./data/truth_abt_buy.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
-             df22 = pd.read_parquet(f"./data/Abt_{model}.pqt")
-             df11 = pd.read_parquet(f"./data/Buy_{model}.pqt")
-             id1t = "idAbt"
-             id2t = "idBuy"
+             df11 = pd.read_parquet(f"./data/Abt_{model}{suffix}.pqt")
+             df22 = pd.read_parquet(f"./data/Buy_{model}{suffix}.pqt")
              ind = abt_buy
              phi = phis[i]
            elif dataset =="AMAZON-GOOGLE":    
@@ -100,8 +99,6 @@ if __name__ == '__main__':
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
              df11 = pd.read_parquet(f"./data/votersA_{model}.pqt")
              df22 = pd.read_parquet(f"./data/votersB_{model}.pqt")
-             id1t = "id1"
-             id2t = "id2"  
              ind = voters
              model_name = f"{model}{suffix}"
              phi = phis[i]

@@ -133,7 +133,7 @@ def run(df11, df22, truth, model_name, phi):
 
 
 if __name__ == '__main__':
-     model = "mpnet_ft"
+     model = "mini"
      df22 = pd.read_parquet(f"./data/Buy_{model}.pqt")
      df11 = pd.read_parquet(f"./data/Abt_{model}.pqt")
      truth = pd.read_csv("./data/truth_abt_buy.csv", sep=",", encoding="unicode_escape", keep_default_na=False)

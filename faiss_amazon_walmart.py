@@ -16,7 +16,7 @@ def run(df11, df22, truth, model_name, phi):
         id_walmart = r["id2"] #id2
         id_amazon = r["id1"]  #id1
         if not id_walmart in df22['id'].values or not id_amazon in df11['id'].values:
-                print(f"Disregarding {id_walmart} or {id_amazon}")
+                #print(f"Disregarding {id_walmart} or {id_amazon}")
                 continue
 
         if id_amazon in truthD:
