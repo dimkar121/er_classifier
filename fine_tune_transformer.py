@@ -199,7 +199,7 @@ def fine_tune(text_columns_1, text_columns_2, gold_standard, id1, id2, pq1, pq2,
     model.fit(
         train_objectives=[(train_dataloader, train_loss)],
         epochs=num_epochs,
-        evaluation_steps=50,
+        evaluation_steps=200,
         evaluator=triplet_evaluator,
         warmup_steps=warmup_steps,
         output_path=output_model_path,
@@ -222,7 +222,7 @@ import torch
 import random
 if __name__ == '__main__':
     # This block runs when the script is executed directly
-    #model_name = 'all-MiniLM-L6-v2'
+    model_name = 'all-MiniLM-L6-v2'
     model_name = "all-mpnet-base-v2"
     # model_name = "roberta-base-nli-stsb-mean-tokens"
     #model_name = 'intfloat/e5-large-v2'
@@ -231,60 +231,33 @@ if __name__ == '__main__':
     model_tag = "mpnet"
     
     
-    pq1 = pd.read_parquet(f"./data/Abt_{model_tag}.pqt")
+    pq1 = pd.read_parquet(f"./data/ACM_{model_tag}.pqt")
     #pq1 = pq1.dropna(subset=['title'])
-    pq2 = pd.read_parquet(f"./data/Buy_{model_tag}.pqt")
-    gold_standard = pd.read_csv(f"./data/truth_abt_buy.csv", sep=",", encoding="utf-8", keep_default_na=False)
+    pq2 = pd.read_parquet(f"./data/DBLP_{model_tag}.pqt")
+    gold_standard = pd.read_csv(f"./data/truth_ACM_DBLP.csv", sep=",", encoding="utf-8", keep_default_na=False) 
+    model_path = f'./data/ACM_DBLP_{model_tag}_ft_model'
+    fine_tune(["title","authors","venue","year"],
+              ["title","authors","venue","year"],
+              gold_standard, "idACM", "idDBLP", pq1, pq2, model_name, model_path)
 
-    #pq1['id'] = pd.to_numeric(pq1['id'], errors='coerce')
-    #pq2['id'] = pd.to_numeric(pq2['id'], errors='coerce')
-    #valid_d1_ids = set(pq1['id'].values)
-    #valid_d2_ids = set(pq2['id'].values)
-    #mask_to_keep = gold_standard['D1'].isin(valid_d1_ids) & gold_standard['D2'].isin(valid_d2_ids)
-    #gold_standard = gold_standard[mask_to_keep].copy()
-    #matches = len(gold_standard.keys()) 
-
-
-    #print(pq1.dtypes)
-    #print(pq2.dtypes)
-    #print( gold_standard.dtypes)
-    #exit(1)
-
-    #pq2['id'] = pd.to_numeric(pq2['id'], errors='coerce')
-    #pq2.dropna(subset=['id'], inplace=True)
-    #pq2['id'] = pq2['id'].astype(int)
-    #pq1['id'] = pd.to_numeric(pq1['id'], errors='coerce')
-    #pq1.dropna(subset=['id'], inplace=True)
-    #pq1['id'] = pq1['id'].astype(int)    
-    #gold_standard['id1'] = gold_standard['id1'].astype(int)
-    #gold_standard['id2'] = gold_standard['id2'].astype(int)
-    #pq2.reset_index(drop=True, inplace=True)
-    #pq1.reset_index(drop=True, inplace=True)
-
-
-    model_path = f'./data/abt_buy_{model_tag}_ft_model'
-    fine_tune(["name","description","price"],
-              ["name","description","price"],
-              gold_standard, "idAbt", "idBuy", pq1, pq2, model_name, model_path)
-
-    df = pd.read_csv("./data/Abt.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/ACM.csv", sep=",", encoding="unicode_escape")
     embedding_model = SentenceTransformer(model_path)
     embed_transformer.embed(
         df=df,
-        text_columns=["name","description","price"],
+        text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'./data/Abt_{model_tag}_ft.pqt',
+        output_filename=f'./data/ACM_{model_tag}_ft.pqt',
         model=embedding_model,
-        name_minhash="name",
+        name_minhash="title",
     )
 
-    df = pd.read_csv("./data/Buy.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/DBLP.csv", sep=",", encoding="unicode_escape")
     embed_transformer.embed(
         df=df,
-        text_columns=["name","description","price"],
+        text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'./data/Buy_{model_tag}_ft.pqt',
+        output_filename=f'./data/DBLP_{model_tag}_ft.pqt',
         model=embedding_model,       
-        name_minhash="name",
+        name_minhash="title",
     )
     

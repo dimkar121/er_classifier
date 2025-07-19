@@ -7,11 +7,13 @@ import faiss_voters as voters
 import faiss_amazon_google as amazon_google
 import faiss_amazon_walmart as amazon_walmart
 import faiss_abt_buy as abt_buy
+import faiss_acm_dblp as acm_dblp
+
 
 
 if __name__ == '__main__':
      datasets = [ "IMDB-DBPEDIA",   "AMAZON-WALMART",  "AMAZON-GOOGLE" ,"ABT-BUY", "FODORS-ZAGATS", "ACM-DBLP","SCHOLAR-DBLP", "VOTERS" ]  
-     datasets = [ "AMAZON-GOOGLE" ]
+     datasets = [ "ACM-DBLP" ]
      models = ["mini", "mpnet"]
      
      for dataset in datasets:
@@ -54,14 +56,13 @@ if __name__ == '__main__':
              ind = amazon_walmart
              phi = phis[i]
            elif dataset == "ACM-DBLP":
+             phis = [0.35, 0.35]
              truth_file="./data/truth_ACM_DBLP.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
-             df22 = pd.read_parquet(f"./data/ACM_{model}.pqt")
-             df11 = pd.read_parquet(f"./data/DBLP_{model}.pqt")
-             if model == "e5":
-                df22["id"] = df22["id"].astype(int)
-             id1t = "idACM"
-             id2t = "idDBLP"
+             df22 = pd.read_parquet(f"./data/DBLP_{model}.pqt")
+             df11 = pd.read_parquet(f"./data/ACM_{model}.pqt")
+             ind = acm_dblp
+             phi = phis[i]
            elif dataset == "FODORS-ZAGATS":
              truth_file="./data/truth_fodors_zagats.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)

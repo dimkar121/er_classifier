@@ -61,11 +61,11 @@ if __name__ == '__main__':
     # This block runs when the script is executed directly
     model_name = 'all-MiniLM-L6-v2'
     #model_name = 'intfloat/e5-large-v2'
-    #model_name = "all-mpnet-base-v2"
+    model_name = "all-mpnet-base-v2"
     # model_name = "roberta-base-nli-stsb-mean-tokens"
 
     folder = "./data"
-    model_tag = "mini"
+    model_tag = "mpnet"
     embedding_model = SentenceTransformer(model_name)
     device_name = embedding_model.device.type
     if device_name == 'cuda':
@@ -73,24 +73,22 @@ if __name__ == '__main__':
     else:
         print(f"The model is on the CPU.")
 
-    #df = pd.read_csv("./data/imdb.csv", sep="|", encoding="unicode_escape")
-    df = pd.read_csv("./data/amazon_products.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/ACM.csv", sep=",", encoding="unicode_escape")
     embed(
         df=df,
-        text_columns=["brand","category","longdescr","modelno","orig_techdetails","price","shortdescr","title"],
+        text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'{folder}/amazon_products_{model_tag}.pqt',
+        output_filename=f'{folder}/ACM_{model_tag}.pqt',
         model=embedding_model, 
         name_minhash="title"
     )
 
-    #df = pd.read_csv("./data/dbpedia.csv", sep="|", encoding="unicode_escape")
-    df = pd.read_csv("./data/walmart_products.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/DBLP.csv", sep=",", encoding="unicode_escape")
     embed(
         df=df,
-        text_columns=["brand","category","longdescr","modelno","orig_techdetails","price","shortdescr","title"],
+        text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'{folder}/walmart_products_{model_tag}.pqt',
+        output_filename=f'{folder}/DBLP_{model_tag}.pqt',
         model=embedding_model,
         name_minhash="title"
     )
