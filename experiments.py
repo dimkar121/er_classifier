@@ -8,12 +8,13 @@ import faiss_amazon_google as amazon_google
 import faiss_amazon_walmart as amazon_walmart
 import faiss_abt_buy as abt_buy
 import faiss_acm_dblp as acm_dblp
+import faiss_scholar_dblp2 as scholar_dblp2
 
 
 
 if __name__ == '__main__':
      datasets = [ "IMDB-DBPEDIA",   "AMAZON-WALMART",  "AMAZON-GOOGLE" ,"ABT-BUY", "FODORS-ZAGATS", "ACM-DBLP","SCHOLAR-DBLP", "VOTERS" ]  
-     datasets = [ "AMAZON-WALMART" ]
+     datasets = [ "SCHOLAR-DBLP" ]
      models = ["mini", "mpnet"]
      
      for dataset in datasets:
@@ -56,6 +57,7 @@ if __name__ == '__main__':
              phi = phis[i]
            elif dataset == "ACM-DBLP":
              phis = [0.35, 0.35]
+             times = [79,368] 
              truth_file="./data/truth_ACM_DBLP.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
              df22 = pd.read_parquet(f"./data/DBLP_{model}{suffix}.pqt")
@@ -83,17 +85,17 @@ if __name__ == '__main__':
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
              df11 = pd.read_parquet(f"./data/Amazon_{model}{suffix}.pqt")
              df22 = pd.read_parquet(f"./data/Google_{model}{suffix}.pqt")
-             id1t = "idAmazon"
-             id2t = "idGoogleBase"
              ind = amazon_google
              phi = phis[i]
            elif dataset == "SCHOLAR-DBLP":
+             times = [306,1175]
+             phis = [0.15, 0.20]                
              truth_file="./data/truth_Scholar_DBLP.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
-             df22 = pd.read_parquet(f"./data/DBLP2_{model}.pqt")
-             df11 = pd.read_parquet(f"./data/Scholar_{model}.pqt")
-             id1t = "idDBLP"
-             id2t = "idScholar"
+             df22 = pd.read_parquet(f"./data/DBLP2_{model}{suffix}.pqt")
+             df11 = pd.read_parquet(f"./data/Scholar_{model}{suffix}.pqt")
+             ind = scholar_dblp2
+             phi = phis[i]
            elif dataset == "VOTERS":
              truth_file=f"./data/truth_voters.csv"
              truth = pd.read_csv(truth_file, sep=",", encoding="utf-8", keep_default_na=False)
@@ -118,8 +120,16 @@ if __name__ == '__main__':
          # Calculate F1 Score from recall and precision
          plots_df['f1_score'] = 2 * (plots_df['precision'] * plots_df['recall']) / (plots_df['precision'] + plots_df['recall'])
          plots_df['f1_score'] = plots_df['f1_score'].round(2)
-         csv_output_path = f'./plots/results_{dataset}_{model}{suffix}.csv'
+         csv_output_path = f'./plots/results_{dataset}_{model}.csv'
+         
          print(f"saving the df to {csv_output_path}")
          plots_df.to_csv(csv_output_path, index=False)
+       results_times = {
+            'time':times
+       }
+       times_df = pd.DataFrame(results_times )
+       times_df.to_csv(f'./plots/results_{dataset}_times.csv', index=False)
+
+
   
 

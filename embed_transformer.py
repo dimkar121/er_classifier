@@ -61,11 +61,11 @@ if __name__ == '__main__':
     # This block runs when the script is executed directly
     model_name = 'all-MiniLM-L6-v2'
     #model_name = 'intfloat/e5-large-v2'
-    model_name = "all-mpnet-base-v2"
+    #model_name = "all-mpnet-base-v2"
     # model_name = "roberta-base-nli-stsb-mean-tokens"
 
     folder = "./data"
-    model_tag = "mpnet"
+    model_tag = "mini"
     embedding_model = SentenceTransformer(model_name)
     device_name = embedding_model.device.type
     if device_name == 'cuda':
@@ -73,22 +73,22 @@ if __name__ == '__main__':
     else:
         print(f"The model is on the CPU.")
 
-    df = pd.read_csv("./data/ACM.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/Scholar.csv", sep=",", encoding="utf-8")
     embed(
         df=df,
         text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'{folder}/ACM_{model_tag}.pqt',
+        output_filename=f'{folder}/Scholar_{model_tag}.pqt',
         model=embedding_model, 
         name_minhash="title"
     )
 
-    df = pd.read_csv("./data/DBLP.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/DBLP2.csv", sep=",", encoding="utf-8")
     embed(
         df=df,
         text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'{folder}/DBLP_{model_tag}.pqt',
+        output_filename=f'{folder}/DBLP2_{model_tag}.pqt',
         model=embedding_model,
         name_minhash="title"
     )

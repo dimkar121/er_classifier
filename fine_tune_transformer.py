@@ -165,7 +165,7 @@ def fine_tune(text_columns_1, text_columns_2, gold_standard, id1, id2, pq1, pq2,
 
     # TripletLoss requires a dataloader that creates smart batches.
     # We'll use a batch size of 32, but you can adjust this based on your GPU memory.
-    train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=2)
+    train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=8)
 
     # Define the TripletLoss function. This is the heart of the fine-tuning.
     train_loss = losses.TripletLoss(model=model)
@@ -208,7 +208,7 @@ def fine_tune(text_columns_1, text_columns_2, gold_standard, id1, id2, pq1, pq2,
         checkpoint_save_steps=500,  # Save a checkpoint every 500 steps
         #use_amp=False  # <-- Add this line
         optimizer_class=AdamW,
-        optimizer_params={'lr': 2e-5}
+        optimizer_params={'lr': 3e-5}
     )
     end = time.time()
 
@@ -223,41 +223,42 @@ import random
 if __name__ == '__main__':
     # This block runs when the script is executed directly
     model_name = 'all-MiniLM-L6-v2'
-    model_name = "all-mpnet-base-v2"
+    #model_name = "all-mpnet-base-v2"
     # model_name = "roberta-base-nli-stsb-mean-tokens"
     #model_name = 'intfloat/e5-large-v2'
 
     #embedding_model = SentenceTransformer(model_name)
-    model_tag = "mpnet"
+    model_tag = "mini"
     
-    
-    pq1 = pd.read_parquet(f"./data/ACM_{model_tag}.pqt")
+    start_time=time.time()
+    pq1 = pd.read_parquet(f"./data/Scholar_{model_tag}.pqt")
     #pq1 = pq1.dropna(subset=['title'])
-    pq2 = pd.read_parquet(f"./data/DBLP_{model_tag}.pqt")
-    gold_standard = pd.read_csv(f"./data/truth_ACM_DBLP.csv", sep=",", encoding="utf-8", keep_default_na=False) 
-    model_path = f'./data/ACM_DBLP_{model_tag}_ft_model'
+    pq2 = pd.read_parquet(f"./data/DBLP2_{model_tag}.pqt")
+    gold_standard = pd.read_csv(f"./data/truth_Scholar_DBLP.csv", sep=",", encoding="utf-8", keep_default_na=False) 
+    model_path = f'./data/Scholar_DBLP2_{model_tag}_ft_model'
     fine_tune(["title","authors","venue","year"],
               ["title","authors","venue","year"],
-              gold_standard, "idACM", "idDBLP", pq1, pq2, model_name, model_path)
+              gold_standard, "idScholar", "idDBLP", pq1, pq2, model_name, model_path)
 
-    df = pd.read_csv("./data/ACM.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/Scholar.csv", sep=",", encoding="utf-8")
     embedding_model = SentenceTransformer(model_path)
     embed_transformer.embed(
         df=df,
         text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'./data/ACM_{model_tag}_ft.pqt',
+        output_filename=f'./data/Scholar_{model_tag}_ft.pqt',
         model=embedding_model,
         name_minhash="title",
     )
 
-    df = pd.read_csv("./data/DBLP.csv", sep=",", encoding="unicode_escape")
+    df = pd.read_csv("./data/DBLP2.csv", sep=",", encoding="utf-8")
     embed_transformer.embed(
         df=df,
         text_columns=["title","authors","venue","year"],
         prefix="",
-        output_filename=f'./data/DBLP_{model_tag}_ft.pqt',
+        output_filename=f'./data/DBLP2_{model_tag}_ft.pqt',
         model=embedding_model,       
         name_minhash="title",
     )
-    
+    end_time=time.time()
+    print(f"time={end_time-start_time} seconds.")
